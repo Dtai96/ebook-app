@@ -1,12 +1,12 @@
 {
   "expo": {
-    "name": "ebook-app",
-    "slug": "ebook-app",
+    "name": "Mộc Thư",
+    "slug": "moc-thu-mobile",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "ebookapp",
-    "userInterfaceStyle": "automatic",
+    "scheme": "mocthu",
+    "userInterfaceStyle": "light",
     "ios": {
       "icon": "./assets/expo.icon"
     },
@@ -28,14 +28,14 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#208AEF",
+          "backgroundColor": "#365E4D",
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 76
         }
       ]
     ],
     "experiments": {
-      "typedRoutes": true,
+      "typedRoutes": false,
       "reactCompiler": true
     }
   }
