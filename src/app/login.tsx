@@ -10,7 +10,7 @@ export default function LoginScreen() {
   const [showPassword, setShowPassword] = useState(false);
   return (
     <SafeAreaView style={styles.safe}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : "height"} style={styles.flex}>
         <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
           <Pressable onPress={() => router.back()} style={styles.close}><AppIcon name="close" size={30} /></Pressable>
           <View style={styles.brand}><View style={styles.logo}><Text style={styles.logoText}>M</Text></View><Text style={styles.brandName}>Mộc Thư</Text></View>

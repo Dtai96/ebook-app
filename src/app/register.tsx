@@ -8,7 +8,7 @@ import { colors, radii } from '@/constants/theme';
 export default function RegisterScreen() {
   return (
     <SafeAreaView style={styles.safe}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : "height"} style={styles.flex}>
         <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
           <Pressable onPress={() => router.back()} style={styles.close}><AppIcon name="close" size={30} /></Pressable>
           <Text style={styles.kicker}>BẮT ĐẦU HÀNH TRÌNH</Text>

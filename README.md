@@ -32,7 +32,7 @@ Không dùng `localhost` khi chạy app trên điện thoại thật. Front-end 
 
 ## Các luồng đã có
 
-- Home, tìm kiếm theo từ khóa/chủ đề, thư viện và hồ sơ.
+- Home, tìm kiếm theo tên sách hoặc tác giả (có/không dấu), lọc chủ đề, thư viện và hồ sơ.
 - Chi tiết sách, danh sách chương và trạng thái yêu thích.
 - Reader, chuyển chương, tùy chỉnh cỡ chữ, light/sepia/dark theme.
 - Bookmark, lưu tiến độ trong phiên làm việc.
