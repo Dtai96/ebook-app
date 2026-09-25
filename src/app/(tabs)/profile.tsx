@@ -1,28 +1,35 @@
 import { router } from 'expo-router';
+import { useState } from 'react';
 import { Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 
 import { Screen } from '@/components/screen';
 import { AppIcon } from '@/components/ui/app-icon';
 import { colors, radii } from '@/constants/theme';
-import { useState } from 'react';
-
-const rows = [
-  { icon: 'Aa', title: 'Cài đặt đọc', subtitle: 'Font, cỡ chữ và khoảng cách dòng' },
-  { icon: '◐', title: 'Giao diện', subtitle: 'Theo cài đặt hệ thống' },
-  { icon: '♧', title: 'Bookmark', subtitle: '1 vị trí đã đánh dấu' },
-  { icon: '?', title: 'Trợ giúp', subtitle: 'Câu hỏi thường gặp và góp ý' },
-];
+import { useAppStore } from '@/store/app-store';
 
 export default function ProfileScreen() {
+  const { bookmarks, readerPreferences, signOut, user } = useAppStore();
   const [notifications, setNotifications] = useState(true);
+  const rows = [
+    { icon: 'Aa', title: 'Cài đặt đọc', subtitle: `${readerPreferences.fontSize}px · Dòng ${readerPreferences.lineHeight} · ${readerPreferences.speed}x`, onPress: () => router.push('/reader/slow-2') },
+    { icon: '◐', title: 'Giao diện đọc', subtitle: readerPreferences.theme === 'light' ? 'Sáng' : readerPreferences.theme === 'sepia' ? 'Sepia' : 'Tối', onPress: () => router.push('/reader/slow-2') },
+    { icon: '♧', title: 'Bookmark', subtitle: `${bookmarks.length} vị trí đã đánh dấu`, onPress: () => router.push({ pathname: '/(tabs)/library', params: { view: 'bookmarks' } }) },
+    { icon: '?', title: 'Trợ giúp', subtitle: 'Câu hỏi thường gặp và góp ý', onPress: () => undefined },
+  ];
+  const displayUser = user ?? { name: 'Bạn đọc Mộc Thư', email: 'Chưa đăng nhập', initials: 'MT' };
+
+  const logout = () => {
+    signOut();
+    router.replace('/login');
+  };
+
   return (
     <Screen>
       <Text style={styles.kicker}>TÀI KHOẢN</Text>
       <Text style={styles.title}>Cá nhân</Text>
       <View style={styles.profileCard}>
-        <View style={styles.avatar}><Text style={styles.avatarText}>DT</Text></View>
-        <View style={styles.person}><Text style={styles.name}>Duy Trần</Text><Text style={styles.email}>duy.reader@example.com</Text></View>
-        <Pressable onPress={() => router.push('/login')}><Text style={styles.edit}>Sửa</Text></Pressable>
+        <View style={styles.avatar}><Text style={styles.avatarText}>{displayUser.initials}</Text></View>
+        <View style={styles.person}><Text style={styles.name}>{displayUser.name}</Text><Text style={styles.email}>{displayUser.email}</Text><View style={styles.member}><Text style={styles.memberText}>THÀNH VIÊN MỘC THƯ</Text></View></View>
       </View>
       <View style={styles.goalCard}>
         <View><Text style={styles.goalKicker}>MỤC TIÊU TUẦN</Text><Text style={styles.goalTitle}>Đọc 5 ngày</Text><Text style={styles.goalMeta}>Bạn đã hoàn thành 4/5 ngày</Text></View>
@@ -31,20 +38,20 @@ export default function ProfileScreen() {
 
       <Text style={styles.sectionTitle}>Tùy chỉnh</Text>
       <View style={styles.settings}>
-        {rows.map((row, index) => (
-          <Pressable key={row.title} style={[styles.row, index < rows.length - 1 && styles.rowBorder]}>
+        {rows.map((row) => (
+          <Pressable key={row.title} onPress={row.onPress} style={styles.row}>
             <View style={styles.rowIcon}><Text style={styles.rowGlyph}>{row.icon}</Text></View>
             <View style={styles.rowText}><Text style={styles.rowTitle}>{row.title}</Text><Text style={styles.rowSubtitle}>{row.subtitle}</Text></View>
             <AppIcon name="chevron" color={colors.inkSoft} />
           </Pressable>
         ))}
-        <View style={styles.row}>
-          <View style={styles.rowIcon}><Text style={styles.rowGlyph}>•</Text></View>
-          <View style={styles.rowText}><Text style={styles.rowTitle}>Nhắc giờ đọc</Text><Text style={styles.rowSubtitle}>20:30 mỗi ngày</Text></View>
+        <View style={[styles.row, styles.rowLast]}>
+          <View style={styles.rowIcon}><AppIcon name="timer" size={19} color={colors.moss} /></View>
+          <View style={styles.rowText}><Text style={styles.rowTitle}>Nhắc giờ đọc</Text><Text style={styles.rowSubtitle}>{notifications ? '20:30 mỗi ngày' : 'Đang tắt'}</Text></View>
           <Switch value={notifications} onValueChange={setNotifications} trackColor={{ false: colors.border, true: colors.sage }} thumbColor={notifications ? colors.moss : colors.white} />
         </View>
       </View>
-      <Pressable onPress={() => router.push('/login')} style={styles.logout}><Text style={styles.logoutText}>Đăng xuất</Text></Pressable>
+      <Pressable onPress={logout} style={styles.logout}><Text style={styles.logoutText}>Đăng xuất</Text></Pressable>
       <Text style={styles.version}>Mộc Thư · Phiên bản giao diện 1.0</Text>
     </Screen>
   );
@@ -53,14 +60,15 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   kicker: { color: colors.coral, fontSize: 10, fontWeight: '800', letterSpacing: 1.5, marginTop: 8 },
   title: { color: colors.ink, fontFamily: 'serif', fontSize: 34, fontWeight: '700', marginTop: 6 },
-  profileCard: { flexDirection: 'row', alignItems: 'center', marginTop: 22 },
+  profileCard: { flexDirection: 'row', alignItems: 'center', marginTop: 22, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, padding: 16, borderRadius: radii.lg },
   avatar: { width: 62, height: 62, borderRadius: 31, backgroundColor: colors.moss, alignItems: 'center', justifyContent: 'center' },
   avatarText: { color: colors.white, fontWeight: '800', fontSize: 17 },
   person: { flex: 1, marginLeft: 14 },
   name: { color: colors.ink, fontSize: 19, fontWeight: '800' },
   email: { color: colors.inkSoft, fontSize: 12, marginTop: 4 },
-  edit: { color: colors.moss, fontSize: 13, fontWeight: '800' },
-  goalCard: { backgroundColor: colors.mossDark, borderRadius: radii.lg, padding: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 26 },
+  member: { alignSelf: 'flex-start', backgroundColor: '#E4ECE5', borderRadius: radii.pill, paddingHorizontal: 8, paddingVertical: 4, marginTop: 8 },
+  memberText: { color: colors.moss, fontSize: 7, fontWeight: '900', letterSpacing: 0.6 },
+  goalCard: { backgroundColor: colors.mossDark, borderRadius: radii.lg, padding: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 18 },
   goalKicker: { color: '#B7CABD', fontSize: 9, fontWeight: '800', letterSpacing: 1.2 },
   goalTitle: { color: colors.white, fontSize: 21, fontWeight: '800', marginTop: 7 },
   goalMeta: { color: '#C8D4CC', fontSize: 11, marginTop: 5 },
@@ -68,8 +76,8 @@ const styles = StyleSheet.create({
   goalNumber: { color: colors.white, fontSize: 13, fontWeight: '800' },
   sectionTitle: { color: colors.ink, fontSize: 21, fontWeight: '800', marginTop: 30, marginBottom: 14 },
   settings: { backgroundColor: colors.surface, borderRadius: radii.lg, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 15 },
-  row: { minHeight: 70, flexDirection: 'row', alignItems: 'center' },
-  rowBorder: { borderBottomWidth: 1, borderBottomColor: colors.border },
+  row: { minHeight: 70, flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: colors.border },
+  rowLast: { borderBottomWidth: 0 },
   rowIcon: { width: 36, height: 36, borderRadius: 12, backgroundColor: '#E8EEE8', alignItems: 'center', justifyContent: 'center' },
   rowGlyph: { color: colors.moss, fontSize: 15, fontWeight: '800' },
   rowText: { flex: 1, marginLeft: 12 },

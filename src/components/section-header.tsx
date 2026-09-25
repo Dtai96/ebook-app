@@ -2,11 +2,11 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { colors } from '@/constants/theme';
 
-export function SectionHeader({ title, action }: { title: string; action?: string }) {
+export function SectionHeader({ title, action, onAction }: { title: string; action?: string; onAction?: () => void }) {
   return (
     <View style={styles.row}>
       <Text style={styles.title}>{title}</Text>
-      {action ? <Pressable><Text style={styles.action}>{action}</Text></Pressable> : null}
+      {action ? <Pressable onPress={onAction}><Text style={styles.action}>{action}</Text></Pressable> : null}
     </View>
   );
 }

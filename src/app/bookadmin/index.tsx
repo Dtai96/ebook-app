@@ -1,11 +1,11 @@
 import { useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import {
+    ActivityIndicator,
     Alert,
     FlatList,
     Modal,
     Platform,
-    Pressable,
     StyleSheet,
     Text,
     TextInput,
@@ -45,24 +45,41 @@ export default function BookManagementScreen() {
   const [error, setError] = useState(false);
 
   const fetchBooks = useCallback(async () => {
+    const MIN_LOADING_TIME = 2000; // 2 seconds
+
+    const startTime = Date.now();
+
     try {
       setLoading(true);
       setError(false);
 
       const response = await fetch(`${API_URL}/books`);
 
-      const json = await response.json();
-
       if (!response.ok) {
         throw new Error("Failed to fetch books");
       }
 
+      const json = await response.json();
+
       setBooks(json.data);
     } catch (error) {
-      setError(true);
+      console.error("FETCH BOOKS ERROR:", error);
 
-      Alert.alert("Error", "Cannot load books");
+      setError(true);
     } finally {
+      // Calculate how long the API request took
+      const elapsedTime = Date.now() - startTime;
+
+      // Calculate remaining loading time
+      const remainingTime = Math.max(MIN_LOADING_TIME - elapsedTime, 0);
+
+      // Wait for the remaining time
+      if (remainingTime > 0) {
+        await new Promise<void>((resolve) =>
+          setTimeout(resolve, remainingTime),
+        );
+      }
+
       setLoading(false);
     }
   }, []);
@@ -289,11 +306,31 @@ export default function BookManagementScreen() {
 
   if (error) {
     return (
-      <SafeAreaView>
-        <View>
-          <Pressable onPress={fetchBooks}>
-            <Text>Retry</Text>
-          </Pressable>
+      <SafeAreaView style={styles.stateContainer}>
+        <View style={styles.stateContent}>
+          <View style={styles.errorIconContainer}>
+            <Text style={styles.errorIcon}>!</Text>
+          </View>
+
+          <Text style={styles.stateTitle}>Something Went Wrong</Text>
+
+          <Text style={styles.stateDescription}>
+            We couldn't load your books. Please check your internet connection
+            and try again.
+          </Text>
+
+          <TouchableOpacity
+            style={styles.retryButton}
+            onPress={fetchBooks}
+            activeOpacity={0.8}
+            disabled={loading}
+          >
+            {loading ? (
+              <ActivityIndicator size="small" color="#ffffff" />
+            ) : (
+              <Text style={styles.retryButtonText}>↻ Try Again</Text>
+            )}
+          </TouchableOpacity>
         </View>
       </SafeAreaView>
     );
@@ -301,9 +338,23 @@ export default function BookManagementScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView>
-        <View>
-          <Text>Loading...</Text>
+      <SafeAreaView style={styles.stateContainer}>
+        <View style={styles.stateContent}>
+          <View style={styles.loadingIconContainer}>
+            <Text style={styles.loadingIcon}>📚</Text>
+          </View>
+
+          <ActivityIndicator
+            size="large"
+            color="#2563eb"
+            style={styles.loadingSpinner}
+          />
+
+          <Text style={styles.stateTitle}>Loading Books</Text>
+
+          <Text style={styles.stateDescription}>
+            Please wait while we fetch your books...
+          </Text>
         </View>
       </SafeAreaView>
     );
@@ -532,5 +583,119 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingVertical: 12,
     borderRadius: 8,
+  },
+  // ================================
+  // LOADING & ERROR STATES
+  // ================================
+
+  stateContainer: {
+    flex: 1,
+    backgroundColor: "#f5f5f5",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 24,
+  },
+
+  stateContent: {
+    width: "100%",
+    maxWidth: 380,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 24,
+    paddingVertical: 40,
+    backgroundColor: "#ffffff",
+    borderRadius: 20,
+
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    elevation: 4,
+  },
+
+  // ================================
+  // LOADING
+  // ================================
+
+  loadingIconContainer: {
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    backgroundColor: "#eff6ff",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 24,
+  },
+
+  loadingIcon: {
+    fontSize: 42,
+  },
+
+  loadingSpinner: {
+    marginBottom: 24,
+  },
+
+  // ================================
+  // ERROR
+  // ================================
+
+  errorIconContainer: {
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    backgroundColor: "#fef2f2",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 24,
+  },
+
+  errorIcon: {
+    fontSize: 48,
+    fontWeight: "bold",
+    color: "#dc2626",
+  },
+
+  // ================================
+  // SHARED TEXT
+  // ================================
+
+  stateTitle: {
+    fontSize: 22,
+    fontWeight: "700",
+    color: "#111827",
+    textAlign: "center",
+    marginBottom: 12,
+  },
+
+  stateDescription: {
+    fontSize: 14,
+    color: "#6b7280",
+    textAlign: "center",
+    lineHeight: 22,
+    marginBottom: 24,
+  },
+
+  // ================================
+  // RETRY BUTTON
+  // ================================
+
+  retryButton: {
+    backgroundColor: "#2563eb",
+    paddingVertical: 14,
+    paddingHorizontal: 32,
+    borderRadius: 12,
+    minWidth: 160,
+    minHeight: 48,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  retryButtonText: {
+    color: "#ffffff",
+    fontSize: 15,
+    fontWeight: "600",
   },
 });

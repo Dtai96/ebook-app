@@ -8,17 +8,22 @@ import { SectionHeader } from '@/components/section-header';
 import { AppIcon } from '@/components/ui/app-icon';
 import { colors, radii, shadows } from '@/constants/theme';
 import { books, categories } from '@/data/books';
+import { useAppStore } from '@/store/app-store';
 
 export default function HomeScreen() {
-  const currentBook = books[0];
+  const { progress, user } = useAppStore();
+  const currentBook = books.find((book) => progress[book.id]) ?? books[0];
+  const currentProgress = progress[currentBook.id] ?? { chapterId: currentBook.chapters[0].id, percent: 0 };
+  const currentChapter = currentBook.chapters.find((chapter) => chapter.id === currentProgress.chapterId) ?? currentBook.chapters[0];
+  const firstName = user?.name.trim().split(' ').slice(-1)[0] ?? 'bạn';
   return (
     <Screen>
       <View style={styles.topbar}>
         <View>
           <Text style={styles.eyebrow}>THỨ NĂM, 10 THÁNG 9</Text>
-          <Text style={styles.greeting}>Chào buổi chiều, Duy</Text>
+          <Text style={styles.greeting}>Chào buổi chiều, {firstName}</Text>
         </View>
-        <Pressable onPress={() => router.push('/(tabs)/profile')} style={styles.avatar}><Text style={styles.avatarText}>DT</Text></Pressable>
+        <Pressable onPress={() => router.push('/(tabs)/profile')} style={styles.avatar}><Text style={styles.avatarText}>{user?.initials ?? 'MT'}</Text></Pressable>
       </View>
 
       <Pressable onPress={() => router.push('/(tabs)/search')} style={styles.search}>
@@ -34,14 +39,14 @@ export default function HomeScreen() {
         <View style={styles.streak}><Text style={styles.streakNumber}>7</Text><Text style={styles.streakLabel}>ngày</Text></View>
       </View>
 
-      <Pressable onPress={() => router.push('/reader/slow-2')} style={({ pressed }) => [styles.continueCard, pressed && styles.pressed]}>
+      <Pressable onPress={() => router.push(`/reader/${currentProgress.chapterId}`)} style={({ pressed }) => [styles.continueCard, pressed && styles.pressed]}>
         <BookCover book={currentBook} width={92} elevated={false} />
         <View style={styles.continueContent}>
-          <Text style={styles.continueCategory}>CHƯƠNG 2 · 16 PHÚT</Text>
+          <Text style={styles.continueCategory}>CHƯƠNG {currentChapter.number} · {currentChapter.duration.toUpperCase()}</Text>
           <Text numberOfLines={2} style={styles.continueTitle}>{currentBook.title}</Text>
-          <Text numberOfLines={1} style={styles.chapter}>Thành phố của những ký ức</Text>
-          <View style={styles.progressTrack}><View style={styles.progressFill} /></View>
-          <View style={styles.progressMeta}><Text style={styles.progressText}>64% hoàn thành</Text><View style={styles.play}><AppIcon name="play" size={13} color={colors.white} /></View></View>
+          <Text numberOfLines={1} style={styles.chapter}>{currentChapter.title}</Text>
+          <View style={styles.progressTrack}><View style={[styles.progressFill, { width: `${currentProgress.percent}%` }]} /></View>
+          <View style={styles.progressMeta}><Text style={styles.progressText}>{currentProgress.percent}% hoàn thành</Text><View style={styles.play}><AppIcon name="play" size={13} color={colors.white} /></View></View>
         </View>
       </Pressable>
 
@@ -57,9 +62,16 @@ export default function HomeScreen() {
       </View>
 
       <View style={styles.section}>
-        <SectionHeader title="Được yêu thích" action="Xem tất cả" />
+        <SectionHeader title="Được yêu thích" action="Xem tất cả" onAction={() => router.push('/(tabs)/search')} />
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.bookRow}>
           {books.slice(1).map((book) => <BookCard key={book.id} book={book} />)}
+        </ScrollView>
+      </View>
+
+      <View style={styles.section}>
+        <SectionHeader title="Mới trên Mộc Thư" action="Khám phá" onAction={() => router.push('/(tabs)/search')} />
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.bookRow}>
+          {[...books].reverse().slice(0, 4).map((book) => <BookCard key={book.id} book={book} />)}
         </ScrollView>
       </View>
 
@@ -93,7 +105,7 @@ const styles = StyleSheet.create({
   continueTitle: { color: colors.white, fontFamily: 'serif', fontSize: 20, lineHeight: 24, fontWeight: '700', marginTop: 8 },
   chapter: { color: '#D3DDD6', fontSize: 11, marginTop: 5 },
   progressTrack: { height: 4, backgroundColor: '#527363', borderRadius: 2, marginTop: 15, overflow: 'hidden' },
-  progressFill: { width: '64%', height: '100%', backgroundColor: colors.gold, borderRadius: 2 },
+  progressFill: { height: '100%', backgroundColor: colors.gold, borderRadius: 2 },
   progressMeta: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 9 },
   progressText: { color: '#C5D1C9', fontSize: 10 },
   play: { width: 28, height: 28, borderRadius: 14, backgroundColor: colors.coral, alignItems: 'center', justifyContent: 'center', paddingLeft: 2 },

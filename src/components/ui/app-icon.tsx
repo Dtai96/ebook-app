@@ -4,6 +4,7 @@ const glyphs: Record<string, string> = {
   home: '⌂', search: '⌕', library: '▤', profile: '●', back: '‹', heart: '♡', heartFill: '♥',
   bookmark: '♧', bookmarkFill: '♣', play: '▶', pause: 'Ⅱ', settings: 'Aa', more: '•••',
   chevron: '›', close: '×', spark: '✦', previous: '↶', next: '↷', moon: '◐', check: '✓',
+  timer: '◷', quote: '“', note: '≡', trash: '×', info: 'i',
 };
 
 export function AppIcon({ name, size = 22, color = '#17201B' }: { name: keyof typeof glyphs; size?: number; color?: string }) {

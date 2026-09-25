@@ -6,13 +6,15 @@ import { colors, radii } from '@/constants/theme';
 
 export type ReaderTheme = 'light' | 'sepia' | 'dark';
 
-export function ReaderSettings({ visible, onClose, fontSize, setFontSize, theme, setTheme }: {
+export function ReaderSettings({ visible, onClose, fontSize, setFontSize, lineHeight, setLineHeight, theme, setTheme }: {
   visible: boolean;
   onClose: () => void;
   fontSize: number;
   setFontSize: (size: number) => void;
   theme: ReaderTheme;
   setTheme: (theme: ReaderTheme) => void;
+  lineHeight: number;
+  setLineHeight: (lineHeight: number) => void;
 }) {
   const insets = useSafeAreaInsets();
   return (
@@ -26,6 +28,17 @@ export function ReaderSettings({ visible, onClose, fontSize, setFontSize, theme,
           <Pressable onPress={() => setFontSize(Math.max(15, fontSize - 1))} style={styles.fontButton}><Text style={styles.fontSmall}>A</Text></Pressable>
           <View style={styles.sizeValue}><Text style={styles.sizeText}>{fontSize}px</Text></View>
           <Pressable onPress={() => setFontSize(Math.min(24, fontSize + 1))} style={styles.fontButton}><Text style={styles.fontLarge}>A</Text></Pressable>
+        </View>
+        <Text style={styles.label}>Khoảng cách dòng</Text>
+        <View style={styles.lineHeightRow}>
+          {([
+            [1.5, 'Gọn'], [1.72, 'Vừa'], [1.95, 'Thoáng'],
+          ] as const).map(([value, label]) => (
+            <Pressable key={value} onPress={() => setLineHeight(value)} style={[styles.lineHeightButton, lineHeight === value && styles.lineHeightActive]}>
+              <Text style={[styles.linePreview, { lineHeight: 8 * value }, lineHeight === value && styles.linePreviewActive]}>A{`\n`}A{`\n`}A</Text>
+              <Text style={[styles.lineHeightText, lineHeight === value && styles.lineHeightTextActive]}>{label}</Text>
+            </Pressable>
+          ))}
         </View>
         <Text style={styles.label}>Màu nền</Text>
         <View style={styles.themeRow}>
@@ -56,6 +69,13 @@ const styles = StyleSheet.create({
   fontLarge: { color: colors.ink, fontFamily: 'serif', fontSize: 24 },
   sizeValue: { flex: 1, height: 48, backgroundColor: colors.surfaceMuted, borderRadius: radii.md, alignItems: 'center', justifyContent: 'center' },
   sizeText: { color: colors.ink, fontSize: 14, fontWeight: '800' },
+  lineHeightRow: { flexDirection: 'row', gap: 10 },
+  lineHeightButton: { flex: 1, minHeight: 62, borderWidth: 1, borderColor: colors.border, borderRadius: radii.md, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 9 },
+  lineHeightActive: { backgroundColor: '#E2ECE4', borderColor: colors.moss },
+  linePreview: { color: colors.inkSoft, fontFamily: 'serif', fontSize: 8, textAlign: 'center' },
+  linePreviewActive: { color: colors.moss },
+  lineHeightText: { color: colors.inkSoft, fontSize: 11, fontWeight: '700' },
+  lineHeightTextActive: { color: colors.moss },
   themeRow: { flexDirection: 'row', gap: 10 },
   theme: { flex: 1, height: 60, borderWidth: 1, borderColor: colors.border, borderRadius: radii.md, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 5 },
   themeActive: { borderWidth: 2, borderColor: colors.moss },
