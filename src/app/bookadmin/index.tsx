@@ -1,14 +1,16 @@
-import { useEffect, useState } from "react";
+import { useFocusEffect } from "expo-router";
+import { useCallback, useEffect, useState } from "react";
 import {
     Alert,
     FlatList,
     Modal,
+    Platform,
+    Pressable,
     StyleSheet,
     Text,
     TextInput,
     TouchableOpacity,
     View,
-    Platform
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -40,11 +42,15 @@ export default function BookManagementScreen() {
   const [authorId, setAuthorId] = useState("");
   const [status, setStatus] = useState("ongoing");
 
-  const fetchBooks = async () => {
+  const [error, setError] = useState(false);
+
+  const fetchBooks = useCallback(async () => {
     try {
       setLoading(true);
+      setError(false);
 
       const response = await fetch(`${API_URL}/books`);
+
       const json = await response.json();
 
       if (!response.ok) {
@@ -53,15 +59,19 @@ export default function BookManagementScreen() {
 
       setBooks(json.data);
     } catch (error) {
+      setError(true);
+
       Alert.alert("Error", "Cannot load books");
     } finally {
       setLoading(false);
     }
-  };
-
-  useEffect(() => {
-    fetchBooks();
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchBooks();
+    }, [fetchBooks]),
+  );
 
   const openCreateModal = () => {
     setEditingBook(null);
@@ -91,176 +101,159 @@ export default function BookManagementScreen() {
 
   const saveBook = async () => {
     if (!title.trim()) {
-        window.alert('Title is required');
-        return;
+      window.alert("Title is required");
+      return;
     }
 
     if (!categoryId || !authorId) {
-        window.alert(
-            'Category ID and Author ID are required'
-        );
-        return;
+      window.alert("Category ID and Author ID are required");
+      return;
     }
 
     const body = {
-        category_id: Number(categoryId),
-        author_id: Number(authorId),
-        title: title.trim(),
-        description: description.trim() || null,
-        cover: cover.trim() || null,
-        language: 'vi',
-        status,
+      category_id: Number(categoryId),
+      author_id: Number(authorId),
+      title: title.trim(),
+      description: description.trim() || null,
+      cover: cover.trim() || null,
+      language: "vi",
+      status,
     };
 
-    console.log('SENDING BOOK DATA:', body);
+    console.log("SENDING BOOK DATA:", body);
 
     try {
-        const url = editingBook
-            ? `${API_URL}/books/${editingBook.id}`
-            : `${API_URL}/books`;
+      const url = editingBook
+        ? `${API_URL}/books/${editingBook.id}`
+        : `${API_URL}/books`;
 
-        const response = await fetch(url, {
-            method: editingBook ? 'PUT' : 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                Accept: 'application/json',
-            },
-            body: JSON.stringify(body),
-        });
+      const response = await fetch(url, {
+        method: editingBook ? "PUT" : "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify(body),
+      });
 
-        const json = await response.json();
+      const json = await response.json();
 
-        console.log('API RESPONSE:', json);
+      console.log("API RESPONSE:", json);
 
-        if (!response.ok) {
-            const errors = json.errors;
+      if (!response.ok) {
+        const errors = json.errors;
 
-            if (errors) {
-                const errorMessages = Object.values(errors)
-                    .flat()
-                    .join('\n');
+        if (errors) {
+          const errorMessages = Object.values(errors).flat().join("\n");
 
-                window.alert(errorMessages);
-            } else {
-                window.alert(
-                    json.message || 'Cannot save book'
-                );
-            }
-
-            return;
-        }
-
-        setModalVisible(false);
-
-        await fetchBooks();
-
-        window.alert(
-            editingBook
-                ? 'Book updated successfully!'
-                : 'Book created successfully!'
-        );
-
-    } catch (error) {
-        console.error('SAVE BOOK ERROR:', error);
-
-        window.alert('Cannot connect to Laravel API');
-    }
-};
-
-  const deleteBook = async (book: Book) => {
-
-    console.log('Delete button pressed:', book.id);
-
-    const performDelete = async () => {
-        try {
-
-            const url = `${API_URL}/books/${book.id}`;
-
-            console.log('DELETE URL:', url);
-
-            const response = await fetch(url, {
-                method: 'DELETE',
-                headers: {
-                    Accept: 'application/json',
-                },
-            });
-
-            const result = await response.json();
-
-            console.log('DELETE RESPONSE:', result);
-
-            if (!response.ok) {
-                throw new Error(
-                    result.message || 'Delete failed'
-                );
-            }
-
-            // Cập nhật danh sách sau khi xóa thành công
-            setBooks((prevBooks) =>
-                prevBooks.filter(
-                    (item) => item.id !== book.id
-                )
-            );
-
-            if (Platform.OS === 'web') {
-                window.alert('Book deleted successfully!');
-            } else {
-                Alert.alert(
-                    'Success',
-                    'Book deleted successfully!'
-                );
-            }
-
-        } catch (error) {
-
-            console.error('DELETE ERROR:', error);
-
-            const message =
-                error instanceof Error
-                    ? error.message
-                    : 'Cannot delete book';
-
-            if (Platform.OS === 'web') {
-                window.alert(message);
-            } else {
-                Alert.alert('Error', message);
-            }
-        }
-    };
-
-    // React Native Web
-    if (Platform.OS === 'web') {
-
-        const confirmed = window.confirm(
-            `Are you sure you want to delete "${book.title}"?`
-        );
-
-        if (confirmed) {
-            await performDelete();
+          window.alert(errorMessages);
+        } else {
+          window.alert(json.message || "Cannot save book");
         }
 
         return;
+      }
+
+      setModalVisible(false);
+
+      await fetchBooks();
+
+      window.alert(
+        editingBook
+          ? "Book updated successfully!"
+          : "Book created successfully!",
+      );
+    } catch (error) {
+      console.error("SAVE BOOK ERROR:", error);
+
+      window.alert("Cannot connect to Laravel API");
+    }
+  };
+
+  const deleteBook = async (book: Book) => {
+    console.log("Delete button pressed:", book.id);
+
+    const performDelete = async () => {
+      try {
+        const url = `${API_URL}/books/${book.id}`;
+
+        console.log("DELETE URL:", url);
+
+        const response = await fetch(url, {
+          method: "DELETE",
+          headers: {
+            Accept: "application/json",
+          },
+        });
+
+        const result = await response.json();
+
+        console.log("DELETE RESPONSE:", result);
+
+        if (!response.ok) {
+          throw new Error(result.message || "Delete failed");
+        }
+
+        // Cập nhật danh sách sau khi xóa thành công
+        setBooks((prevBooks) =>
+          prevBooks.filter((item) => item.id !== book.id),
+        );
+
+        if (Platform.OS === "web") {
+          window.alert("Book deleted successfully!");
+        } else {
+          Alert.alert("Success", "Book deleted successfully!");
+        }
+      } catch (error) {
+        console.error("DELETE ERROR:", error);
+
+        const message =
+          error instanceof Error ? error.message : "Cannot delete book";
+
+        if (Platform.OS === "web") {
+          window.alert(message);
+        } else {
+          Alert.alert("Error", message);
+        }
+      }
+    };
+
+    // React Native Web
+    if (Platform.OS === "web") {
+      const confirmed = window.confirm(
+        `Are you sure you want to delete "${book.title}"?`,
+      );
+
+      if (confirmed) {
+        await performDelete();
+      }
+
+      return;
     }
 
     // React Native Android / iOS
     Alert.alert(
-        'Delete book',
-        `Are you sure you want to delete "${book.title}"?`,
-        [
-            {
-                text: 'Cancel',
-                style: 'cancel',
-            },
-            {
-                text: 'Delete',
-                style: 'destructive',
-                onPress: () => {
-                    void performDelete();
-                },
-            },
-        ]
+      "Delete book",
+      `Are you sure you want to delete "${book.title}"?`,
+      [
+        {
+          text: "Cancel",
+          style: "cancel",
+        },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () => {
+            void performDelete();
+          },
+        },
+      ],
     );
-};
+  };
+
+  useEffect(() => {
+    console.log(loading);
+  }, [loading]);
 
   const renderBook = ({ item }: { item: Book }) => (
     <View style={styles.bookCard}>
@@ -293,6 +286,28 @@ export default function BookManagementScreen() {
       </View>
     </View>
   );
+
+  if (error) {
+    return (
+      <SafeAreaView>
+        <View>
+          <Pressable onPress={fetchBooks}>
+            <Text>Retry</Text>
+          </Pressable>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (loading) {
+    return (
+      <SafeAreaView>
+        <View>
+          <Text>Loading...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
