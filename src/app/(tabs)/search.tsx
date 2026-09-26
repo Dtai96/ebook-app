@@ -30,7 +30,8 @@ export default function SearchScreen() {
   const params = useLocalSearchParams<{ category?: string }>();
   const [query, setQuery] = useState('');
   const [searchBy, setSearchBy] = useState<SearchBy>('title');
-  const [category, setCategory] = useState(params.category ?? 'Tất cả');
+  const category = params.category ?? 'Tất cả';
+  const setCategory = (value: string) => router.setParams({ category: value });
   const filtered = books.filter((book) =>
     matchesSearch(book, query, searchBy) &&
     (category === 'Tất cả' || book.category === category),

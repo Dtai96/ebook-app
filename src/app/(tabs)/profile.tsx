@@ -2,19 +2,22 @@ import { router } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 
+import { ReaderSettings } from '@/components/reader/reader-settings';
 import { Screen } from '@/components/screen';
 import { AppIcon } from '@/components/ui/app-icon';
 import { colors, radii } from '@/constants/theme';
 import { useAppStore } from '@/store/app-store';
 
 export default function ProfileScreen() {
-  const { bookmarks, readerPreferences, signOut, user } = useAppStore();
+  const { bookmarks, readerPreferences, updateReaderPreferences, signOut, user } = useAppStore();
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
   const [notifications, setNotifications] = useState(true);
   const rows = [
-    { icon: 'Aa', title: 'Cài đặt đọc', subtitle: `${readerPreferences.fontSize}px · Dòng ${readerPreferences.lineHeight} · ${readerPreferences.speed}x`, onPress: () => router.push('/reader/slow-2') },
-    { icon: '◐', title: 'Giao diện đọc', subtitle: readerPreferences.theme === 'light' ? 'Sáng' : readerPreferences.theme === 'sepia' ? 'Sepia' : 'Tối', onPress: () => router.push('/reader/slow-2') },
+    { icon: 'Aa', title: 'Cài đặt đọc', subtitle: `${readerPreferences.fontSize}px · Dòng ${readerPreferences.lineHeight} · ${readerPreferences.speed}x`, onPress: () => setSettingsOpen(true) },
+    { icon: '◐', title: 'Giao diện đọc', subtitle: readerPreferences.theme === 'light' ? 'Sáng' : readerPreferences.theme === 'sepia' ? 'Sepia' : 'Tối', onPress: () => setSettingsOpen(true) },
     { icon: '♧', title: 'Bookmark', subtitle: `${bookmarks.length} vị trí đã đánh dấu`, onPress: () => router.push({ pathname: '/(tabs)/library', params: { view: 'bookmarks' } }) },
-    { icon: '?', title: 'Trợ giúp', subtitle: 'Câu hỏi thường gặp và góp ý', onPress: () => undefined },
+    { icon: '?', title: 'Trợ giúp', subtitle: 'Câu hỏi thường gặp và góp ý', onPress: () => setHelpOpen(!helpOpen) },
   ];
   const displayUser = user ?? { name: 'Bạn đọc Mộc Thư', email: 'Chưa đăng nhập', initials: 'MT' };
 
@@ -51,13 +54,16 @@ export default function ProfileScreen() {
           <Switch value={notifications} onValueChange={setNotifications} trackColor={{ false: colors.border, true: colors.sage }} thumbColor={notifications ? colors.moss : colors.white} />
         </View>
       </View>
-      <Pressable onPress={logout} style={styles.logout}><Text style={styles.logoutText}>Đăng xuất</Text></Pressable>
+      {helpOpen ? <Text style={styles.help}>Đọc sách từ Khám phá. Chạm giữ đoạn văn hoặc chọn biểu tượng bookmark để thêm ghi chú. AI Voice hiện là bản mô phỏng không có âm thanh. Dữ liệu được giữ trong phiên sử dụng.</Text> : null}
+      <ReaderSettings visible={settingsOpen} onClose={() => setSettingsOpen(false)} fontSize={readerPreferences.fontSize} setFontSize={(fontSize) => updateReaderPreferences({ fontSize })} lineHeight={readerPreferences.lineHeight} setLineHeight={(lineHeight) => updateReaderPreferences({ lineHeight })} theme={readerPreferences.theme} setTheme={(theme) => updateReaderPreferences({ theme })} />
+      <Pressable onPress={logout} style={styles.logout}><Text style={styles.logoutText}>{user ? 'Đăng xuất' : 'Đăng nhập'}</Text></Pressable>
       <Text style={styles.version}>Mộc Thư · Phiên bản giao diện 1.0</Text>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
+  help: { color: colors.inkSoft, fontSize: 13, lineHeight: 21, marginTop: 16 },
   kicker: { color: colors.coral, fontSize: 10, fontWeight: '800', letterSpacing: 1.5, marginTop: 8 },
   title: { color: colors.ink, fontFamily: 'serif', fontSize: 34, fontWeight: '700', marginTop: 6 },
   profileCard: { flexDirection: 'row', alignItems: 'center', marginTop: 22, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, padding: 16, borderRadius: radii.lg },

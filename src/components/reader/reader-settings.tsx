@@ -22,12 +22,12 @@ export function ReaderSettings({ visible, onClose, fontSize, setFontSize, lineHe
       <Pressable style={styles.overlay} onPress={onClose} />
       <View style={[styles.sheet, { paddingBottom: Math.max(24, insets.bottom + 12) }]}>
         <View style={styles.handle} />
-        <View style={styles.header}><Text style={styles.title}>Tùy chỉnh trang đọc</Text><Pressable onPress={onClose}><AppIcon name="close" size={28} /></Pressable></View>
+        <View style={styles.header}><Text style={styles.title}>Tùy chỉnh trang đọc</Text><Pressable accessibilityRole="button" accessibilityLabel="Đóng tùy chỉnh" onPress={onClose}><AppIcon name="close" size={28} /></Pressable></View>
         <Text style={styles.label}>Cỡ chữ</Text>
         <View style={styles.fontRow}>
-          <Pressable onPress={() => setFontSize(Math.max(15, fontSize - 1))} style={styles.fontButton}><Text style={styles.fontSmall}>A</Text></Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel="Giảm cỡ chữ" disabled={fontSize <= 15} onPress={() => setFontSize(Math.max(15, fontSize - 1))} style={styles.fontButton}><Text style={styles.fontSmall}>A</Text></Pressable>
           <View style={styles.sizeValue}><Text style={styles.sizeText}>{fontSize}px</Text></View>
-          <Pressable onPress={() => setFontSize(Math.min(24, fontSize + 1))} style={styles.fontButton}><Text style={styles.fontLarge}>A</Text></Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel="Tăng cỡ chữ" disabled={fontSize >= 24} onPress={() => setFontSize(Math.min(24, fontSize + 1))} style={styles.fontButton}><Text style={styles.fontLarge}>A</Text></Pressable>
         </View>
         <Text style={styles.label}>Khoảng cách dòng</Text>
         <View style={styles.lineHeightRow}>
