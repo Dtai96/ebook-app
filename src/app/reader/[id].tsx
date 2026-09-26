@@ -131,13 +131,11 @@ function ReaderChapter({ id, percent, paragraph }: { id: string; percent?: strin
       <AudioPlayer
         key={chapter.id}
         visible={playerOpen}
-        onClose={() => setPlayerOpen(false)}
+        onClose={(chapterId) => { setPlayerOpen(false); if (chapterId !== chapter.id) router.replace(`/reader/${chapterId}`); }}
         book={book}
         chapter={chapter}
         speed={readerPreferences.speed}
         setSpeed={(speed) => updateReaderPreferences({ speed })}
-        hasNextChapter={Boolean(next)}
-        onNextChapter={() => { if (next) { setReadingPercent(0); setNote(''); router.replace(`/reader/${next.id}`); } }}
       />
 
       <Modal visible={bookmarkOpen} transparent animationType="fade" onRequestClose={() => setBookmarkOpen(false)}>
