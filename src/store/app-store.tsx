@@ -1,4 +1,4 @@
-import { createContext, ReactNode, useContext, useMemo, useState } from 'react';
+import { createContext, ReactNode, useContext, useMemo, useRef, useState } from 'react';
 
 import type { ReaderTheme } from '@/components/reader/reader-settings';
 
@@ -23,7 +23,7 @@ type AppState = {
   progress: Record<string, ReadingProgress>;
   readerPreferences: ReaderPreferences;
   signIn: (email: string) => void;
-  signUp: (name: string, email: string) => void;
+  signUp: (name: string, email: string) => string | null;
   signOut: () => void;
   toggleFavorite: (bookId: string) => void;
   saveBookmark: (bookmark: NewBookmark) => void;
@@ -57,6 +57,8 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   });
   const [readerPreferences, setReaderPreferences] = useState<ReaderPreferences>({ fontSize: 18, lineHeight: 1.72, theme: 'light', speed: 1 });
 
+  const accounts = useRef<Record<string, UserProfile>>({ 'duy.reader@example.com': { name: 'Duy Trần', email: 'duy.reader@example.com', initials: 'DT' } });
+
   const value = useMemo<AppState>(() => ({
     user,
     favorites,
@@ -64,11 +66,20 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     progress,
     readerPreferences,
     signIn: (email) => {
+      const existing = accounts.current[email.trim().toLowerCase()];
+      if (existing) { setUser(existing); return; }
       const localName = email.split('@')[0].replace(/[._-]+/g, ' ');
       const name = localName.replace(/\b\w/g, (letter) => letter.toUpperCase()) || 'Bạn đọc';
       setUser({ name, email, initials: initialsFromName(name) });
     },
-    signUp: (name, email) => setUser({ name: name.trim(), email: email.trim(), initials: initialsFromName(name) }),
+    signUp: (name, email) => {
+      const normalizedEmail = email.trim().toLowerCase();
+      if (accounts.current[normalizedEmail]) return 'Email này đã được đăng ký. Hãy dùng email khác.';
+      const profile = { name: name.trim(), email: normalizedEmail, initials: initialsFromName(name) };
+      accounts.current[normalizedEmail] = profile;
+      setUser(profile);
+      return null;
+    },
     signOut: () => setUser(null),
     toggleFavorite: (bookId) => setFavorites((current) => current.includes(bookId) ? current.filter((id) => id !== bookId) : [...current, bookId]),
     saveBookmark: (bookmark) => setBookmarks((current) => {

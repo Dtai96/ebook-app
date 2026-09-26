@@ -12,11 +12,12 @@ export default function RegisterScreen() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [agreed, setAgreed] = useState(true);
+  const [agreed, setAgreed] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
   const submit = () => {
+    if (loading) return;
     const normalizedEmail = email.trim().toLowerCase();
     if (name.trim().length < 2) return setError('Vui lòng nhập họ tên của bạn.');
     if (!/^\S+@\S+\.\S+$/.test(normalizedEmail)) return setError('Email chưa đúng định dạng.');
@@ -26,9 +27,9 @@ export default function RegisterScreen() {
     setError('');
     setLoading(true);
     setTimeout(() => {
-      signUp(name, normalizedEmail);
+      const message = signUp(name, normalizedEmail);
       setLoading(false);
-      router.replace('/(tabs)/home');
+      if (message) setError(message); else router.replace('/(tabs)/home');
     }, 450);
   };
 
@@ -39,12 +40,12 @@ export default function RegisterScreen() {
           <Pressable accessibilityLabel="Đóng" onPress={() => router.back()} style={styles.close}><AppIcon name="close" size={30} /></Pressable>
           <Text style={styles.kicker}>BẮT ĐẦU HÀNH TRÌNH</Text>
           <Text style={styles.title}>Tạo góc đọc của bạn.</Text>
-          <Text style={styles.subtitle}>Lưu sách, đánh dấu trang và nghe sách bằng AI Voice trên mọi thiết bị.</Text>
+          <Text style={styles.subtitle}>Trải nghiệm lưu sách, bookmark và AI Voice. Dữ liệu demo được giữ trong phiên sử dụng này.</Text>
           <Text style={styles.label}>Tên hiển thị</Text><TextInput value={name} onChangeText={setName} style={styles.input} placeholder="Tên của bạn" placeholderTextColor="#929790" autoComplete="name" />
           <Text style={styles.label}>Email</Text><TextInput value={email} onChangeText={setEmail} style={styles.input} placeholder="ban@example.com" placeholderTextColor="#929790" keyboardType="email-address" autoCapitalize="none" autoComplete="email" />
           <Text style={styles.label}>Mật khẩu</Text><TextInput value={password} onChangeText={setPassword} style={styles.input} placeholder="Ít nhất 8 ký tự" placeholderTextColor="#929790" secureTextEntry autoComplete="new-password" />
           <View style={styles.passwordHint}><View style={[styles.ruleDot, password.length >= 8 && styles.ruleDotDone]} /><Text style={styles.passwordHintText}>Tối thiểu 8 ký tự</Text></View>
-          <Pressable onPress={() => setAgreed(!agreed)} style={styles.agreement}><View style={[styles.checkbox, !agreed && styles.checkboxOff]}>{agreed ? <AppIcon name="check" size={13} color={colors.white} /> : null}</View><Text style={styles.agreementText}>Tôi đồng ý với Điều khoản sử dụng và Chính sách bảo mật.</Text></Pressable>
+          <Pressable accessibilityRole="checkbox" accessibilityLabel="Đồng ý điều khoản" accessibilityState={{ checked: agreed }} onPress={() => setAgreed(!agreed)} style={styles.agreement}><View style={[styles.checkbox, !agreed && styles.checkboxOff]}>{agreed ? <AppIcon name="check" size={13} color={colors.white} /> : null}</View><Text style={styles.agreementText}>Tôi đồng ý với Điều khoản sử dụng và Chính sách bảo mật.</Text></Pressable>
           {error ? <View style={styles.errorBox}><Text style={styles.error}>{error}</Text></View> : null}
           <Pressable disabled={loading} onPress={submit} style={[styles.primary, loading && styles.disabled]}><Text style={styles.primaryText}>{loading ? 'Đang tạo tài khoản...' : 'Tạo tài khoản'}</Text></Pressable>
           <View style={styles.footer}><Text style={styles.footerText}>Đã có tài khoản? </Text><Pressable onPress={() => router.replace('/login')}><Text style={styles.footerLink}>Đăng nhập</Text></Pressable></View>
