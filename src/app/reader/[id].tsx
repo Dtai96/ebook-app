@@ -1,6 +1,7 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { useMemo, useState } from 'react';
-import { Modal, NativeScrollEvent, NativeSyntheticEvent, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { StatusBar } from 'expo-status-bar';
+import { KeyboardAvoidingView, Platform, Modal, NativeScrollEvent, NativeSyntheticEvent, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AudioPlayer } from '@/components/reader/audio-player';
@@ -17,7 +18,11 @@ const palettes = {
 };
 
 export default function ReaderScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, percent, paragraph } = useLocalSearchParams<{ id: string; percent?: string; paragraph?: string }>();
+  return <ReaderChapter key={[id, percent, paragraph].join(':')} id={id} percent={percent} paragraph={paragraph} />;
+}
+
+function ReaderChapter({ id, percent, paragraph }: { id: string; percent?: string; paragraph?: string }) {
   const { book, chapter } = getChapter(id);
   const { bookmarks, progress, readerPreferences, saveBookmark, saveProgress, updateReaderPreferences } = useAppStore();
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -25,7 +30,17 @@ export default function ReaderScreen() {
   const [bookmarkOpen, setBookmarkOpen] = useState(false);
   const [note, setNote] = useState('');
   const [savedNotice, setSavedNotice] = useState(false);
-  const initialProgress = progress[book.id]?.chapterId === chapter.id ? progress[book.id].percent : 0;
+  const [initialProgress] = useState(() => {
+    const requested = percent === undefined ? NaN : Number(percent);
+    return Number.isFinite(requested) ? Math.min(100, Math.max(0, requested)) : progress[book.id]?.chapterId === chapter.id ? progress[book.id].percent : 0;
+  });
+  const scrollRef = useRef<ScrollView>(null);
+  const viewportHeight = useRef(0);
+  const contentHeight = useRef(0);
+  const paragraphPositions = useRef<Record<number, number>>({});
+  const restored = useRef(false);
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [selectedParagraph, setSelectedParagraph] = useState<number | null>(null);
   const [readingPercent, setReadingPercent] = useState(initialProgress);
   const insets = useSafeAreaInsets();
   const palette = palettes[readerPreferences.theme];
@@ -33,37 +48,59 @@ export default function ReaderScreen() {
   const chapterIndex = book.chapters.findIndex((item) => item.id === chapter.id);
   const previous = book.chapters[chapterIndex - 1];
   const next = book.chapters[chapterIndex + 1];
-  const content = useMemo(() => [...chapter.content, ...chapter.content], [chapter.content]);
-  const quoteIndex = Math.min(content.length - 1, Math.floor((readingPercent / 100) * content.length));
+  const content = chapter.content;
+  const quoteIndex = selectedParagraph ?? Math.min(content.length - 1, Math.floor((readingPercent / 100) * content.length));
   const selectedQuote = content[Math.max(0, quoteIndex)];
 
+  const restorePosition = () => {
+    if (restored.current || !viewportHeight.current || !contentHeight.current) return;
+    const paragraphIndex = paragraph === undefined ? NaN : Number(paragraph);
+    const targetParagraph = Number.isInteger(paragraphIndex) && paragraphIndex >= 0 && paragraphIndex < chapter.content.length;
+    if (targetParagraph && paragraphPositions.current[paragraphIndex] === undefined) return;
+    const scrollable = Math.max(0, contentHeight.current - viewportHeight.current);
+    const y = targetParagraph ? Math.min(scrollable, paragraphPositions.current[paragraphIndex]) : scrollable * initialProgress / 100;
+    restored.current = true;
+    scrollRef.current?.scrollTo({ y, animated: false });
+  };
+
+  useEffect(() => {
+    saveProgress(book.id, chapter.id, initialProgress);
+  }, [book.id, chapter.id, initialProgress, saveProgress]);
+  useEffect(() => () => { if (toastTimer.current) clearTimeout(toastTimer.current); }, []);
+
   const handleScrollEnd = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    if (!restored.current) return;
     const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
     const scrollable = Math.max(1, contentSize.height - layoutMeasurement.height);
     const percent = Math.min(100, Math.max(0, Math.round((contentOffset.y / scrollable) * 100)));
     setReadingPercent(percent);
+    const nearest = Object.entries(paragraphPositions.current).filter(([, y]) => y <= contentOffset.y + 80).at(-1);
+    setSelectedParagraph(nearest ? Number(nearest[0]) : 0);
     saveProgress(book.id, chapter.id, percent);
   };
 
   const saveCurrentBookmark = () => {
-    saveBookmark({ bookId: book.id, chapterId: chapter.id, percent: readingPercent, quote: selectedQuote, note: note.trim() });
+    saveBookmark({ bookId: book.id, chapterId: chapter.id, percent: readingPercent, paragraphIndex: quoteIndex, quote: selectedQuote, note: note.trim() });
     setBookmarkOpen(false);
     setSavedNotice(true);
-    setTimeout(() => setSavedNotice(false), 1800);
+    setNote('');
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setSavedNotice(false), 1800);
   };
 
   return (
     <SafeAreaView edges={['top']} style={[styles.safe, { backgroundColor: palette.background }]}>
+      <StatusBar style={readerPreferences.theme === 'dark' ? 'light' : 'dark'} />
       <View style={[styles.nav, { borderBottomColor: palette.border }]}>
         <Pressable accessibilityLabel="Quay lại" onPress={() => router.back()} style={styles.iconButton}><AppIcon name="back" size={32} color={palette.text} /></Pressable>
         <View style={styles.navCenter}><Text style={[styles.navBook, { color: palette.text }]} numberOfLines={1}>{book.title}</Text><Text style={[styles.navChapter, { color: palette.muted }]}>Chương {chapter.number}/{book.chapters.length}</Text></View>
         <Pressable accessibilityLabel="Lưu vị trí đọc" onPress={() => setBookmarkOpen(true)} style={styles.iconButton}><AppIcon name={chapterBookmarks.length ? 'bookmarkFill' : 'bookmark'} size={23} color={chapterBookmarks.length ? colors.coral : palette.text} /></Pressable>
       </View>
-      <ScrollView onMomentumScrollEnd={handleScrollEnd} onScrollEndDrag={handleScrollEnd} scrollEventThrottle={120} showsVerticalScrollIndicator={false} contentContainerStyle={[styles.content, { paddingBottom: 150 }]}>
+      <ScrollView ref={scrollRef} testID="reader-scroll" onLayout={(event) => { viewportHeight.current = event.nativeEvent.layout.height; restorePosition(); }} onContentSizeChange={(_, height) => { contentHeight.current = height; restorePosition(); }} onScroll={handleScrollEnd} scrollEventThrottle={120} showsVerticalScrollIndicator={false} contentContainerStyle={[styles.content, { paddingBottom: 150 }]}>
         <Text style={[styles.chapterEyebrow, { color: colors.coral }]}>CHƯƠNG {String(chapter.number).padStart(2, '0')}</Text>
         <Text style={[styles.title, { color: palette.text }]}>{chapter.title}</Text>
         <View style={[styles.ornament, { backgroundColor: palette.border }]} />
-        {content.map((paragraph, index) => <Text key={index} selectable style={[styles.paragraph, { color: palette.text, fontSize: readerPreferences.fontSize, lineHeight: readerPreferences.fontSize * readerPreferences.lineHeight }]}>{paragraph}</Text>)}
+        {content.map((paragraph, index) => <Text key={index} testID={`paragraph-${index}`} onLayout={(event) => { paragraphPositions.current[index] = event.nativeEvent.layout.y; restorePosition(); }} onLongPress={() => { setSelectedParagraph(index); setBookmarkOpen(true); }} selectable style={[styles.paragraph, { color: palette.text, fontSize: readerPreferences.fontSize, lineHeight: readerPreferences.fontSize * readerPreferences.lineHeight }]}>{paragraph}</Text>)}
         <View style={[styles.endMark, { borderColor: palette.border }]}><Text style={[styles.endText, { color: palette.muted }]}>Hết chương {chapter.number}</Text></View>
         <View style={styles.chapterNav}>
           <Pressable disabled={!previous} onPress={() => { if (previous) { setReadingPercent(0); setNote(''); router.replace(`/reader/${previous.id}`); } }} style={[styles.chapterButton, { backgroundColor: palette.surface }, !previous && styles.disabled]}><Text style={[styles.chapterButtonMeta, { color: palette.muted }]}>CHƯƠNG TRƯỚC</Text><Text numberOfLines={1} style={[styles.chapterButtonTitle, { color: palette.text }]}>{previous?.title ?? 'Không có'}</Text></Pressable>
@@ -105,14 +142,21 @@ export default function ReaderScreen() {
 
       <Modal visible={bookmarkOpen} transparent animationType="fade" onRequestClose={() => setBookmarkOpen(false)}>
         <Pressable style={styles.modalOverlay} onPress={() => setBookmarkOpen(false)} />
-        <View style={[styles.bookmarkSheet, { paddingBottom: Math.max(24, insets.bottom + 12) }]}>
+        <KeyboardAvoidingView pointerEvents="box-none" behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1, justifyContent: 'flex-end' }}>
+        <ScrollView keyboardShouldPersistTaps="handled" style={styles.bookmarkSheet} contentContainerStyle={{ padding: 22, paddingBottom: Math.max(24, insets.bottom + 12) }}>
           <View style={styles.sheetHeader}><View><Text style={styles.sheetKicker}>VỊ TRÍ {readingPercent}%</Text><Text style={styles.sheetTitle}>Lưu đoạn đang đọc</Text></View><Pressable onPress={() => setBookmarkOpen(false)} style={styles.iconButton}><AppIcon name="close" size={28} /></Pressable></View>
           <View style={styles.quoteCard}><Text style={styles.quoteMark}>“</Text><Text numberOfLines={4} style={styles.quoteText}>{selectedQuote}</Text></View>
+          <View style={styles.chapterNav}>
+            <Pressable accessibilityRole="button" disabled={quoteIndex === 0} onPress={() => setSelectedParagraph(Math.max(0, quoteIndex - 1))} style={[styles.chapterButton, quoteIndex === 0 && styles.disabled]}><Text style={styles.noteLabel}>Đoạn trước</Text></Pressable>
+            <Text style={styles.noteLabel}>Đoạn {quoteIndex + 1}/{content.length}</Text>
+            <Pressable accessibilityRole="button" disabled={quoteIndex === content.length - 1} onPress={() => setSelectedParagraph(Math.min(content.length - 1, quoteIndex + 1))} style={[styles.chapterButton, quoteIndex === content.length - 1 && styles.disabled]}><Text style={styles.noteLabel}>Đoạn sau</Text></Pressable>
+          </View>
           <Text style={styles.noteLabel}>Ghi chú của bạn</Text>
-          <TextInput value={note} onChangeText={setNote} multiline maxLength={240} placeholder="Ví dụ: Ý này muốn nhắc mình điều gì?" placeholderTextColor="#8A918A" style={styles.noteInput} />
+          <TextInput accessibilityLabel="Ghi chú bookmark" value={note} onChangeText={setNote} multiline maxLength={240} placeholder="Ví dụ: Ý này muốn nhắc mình điều gì?" placeholderTextColor="#8A918A" style={styles.noteInput} />
           <View style={styles.noteMeta}><Text style={styles.noteHint}>Có thể lưu vị trí mà không cần ghi chú</Text><Text style={styles.noteCount}>{note.length}/240</Text></View>
           <Pressable onPress={saveCurrentBookmark} style={styles.saveButton}><AppIcon name="bookmarkFill" size={18} color={colors.white} /><Text style={styles.saveButtonText}>Lưu bookmark</Text></Pressable>
-        </View>
+        </ScrollView>
+        </KeyboardAvoidingView>
       </Modal>
     </SafeAreaView>
   );
@@ -151,7 +195,7 @@ const styles = StyleSheet.create({
   toast: { position: 'absolute', top: 68, alignSelf: 'center', zIndex: 4, backgroundColor: colors.moss, borderRadius: radii.pill, paddingHorizontal: 14, paddingVertical: 9, flexDirection: 'row', alignItems: 'center', gap: 7 },
   toastText: { color: colors.white, fontSize: 11, fontWeight: '700' },
   modalOverlay: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(18,25,21,0.42)' },
-  bookmarkSheet: { position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: colors.surface, borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 22 },
+  bookmarkSheet: { flexGrow: 0, maxHeight: '92%', backgroundColor: colors.surface, borderTopLeftRadius: 28, borderTopRightRadius: 28 },
   sheetHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   sheetKicker: { color: colors.coral, fontSize: 9, fontWeight: '900', letterSpacing: 1.2 },
   sheetTitle: { color: colors.ink, fontSize: 22, fontWeight: '800', marginTop: 5 },

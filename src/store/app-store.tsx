@@ -1,14 +1,15 @@
-import { createContext, ReactNode, useContext, useMemo, useRef, useState } from 'react';
+import { createContext, ReactNode, useCallback, useContext, useMemo, useRef, useState } from 'react';
 
 import type { ReaderTheme } from '@/components/reader/reader-settings';
 
 export type UserProfile = { name: string; email: string; initials: string };
-export type ReadingProgress = { chapterId: string; percent: number };
+export type ReadingProgress = { chapterId: string; percent: number; updatedAt: number };
 export type SavedBookmark = {
   id: string;
   bookId: string;
   chapterId: string;
   percent: number;
+  paragraphIndex?: number;
   quote: string;
   note: string;
   createdAt: string;
@@ -53,11 +54,15 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     },
   ]);
   const [progress, setProgress] = useState<Record<string, ReadingProgress>>({
-    'nhung-ngay-rat-cham': { chapterId: 'slow-2', percent: 64 },
+    'nhung-ngay-rat-cham': { chapterId: 'slow-2', percent: 64, updatedAt: 0 },
   });
   const [readerPreferences, setReaderPreferences] = useState<ReaderPreferences>({ fontSize: 18, lineHeight: 1.72, theme: 'light', speed: 1 });
 
   const accounts = useRef<Record<string, UserProfile>>({ 'duy.reader@example.com': { name: 'Duy Trần', email: 'duy.reader@example.com', initials: 'DT' } });
+  const saveProgress = useCallback((bookId: string, chapterId: string, percent: number) => {
+    const safePercent = Math.max(0, Math.min(100, Number.isFinite(percent) ? Math.round(percent) : 0));
+    setProgress((current) => ({ ...current, [bookId]: { chapterId, percent: safePercent, updatedAt: Date.now() } }));
+  }, []);
 
   const value = useMemo<AppState>(() => ({
     user,
@@ -83,14 +88,14 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     signOut: () => setUser(null),
     toggleFavorite: (bookId) => setFavorites((current) => current.includes(bookId) ? current.filter((id) => id !== bookId) : [...current, bookId]),
     saveBookmark: (bookmark) => setBookmarks((current) => {
-      const index = current.findIndex((item) => item.chapterId === bookmark.chapterId && item.percent === bookmark.percent);
+      const index = current.findIndex((item) => item.chapterId === bookmark.chapterId && (bookmark.paragraphIndex !== undefined ? item.paragraphIndex === bookmark.paragraphIndex : item.percent === bookmark.percent));
       const saved: SavedBookmark = { ...bookmark, id: index >= 0 ? current[index].id : `${bookmark.chapterId}-${Date.now()}`, createdAt: 'Vừa xong' };
       return index < 0 ? [saved, ...current] : current.map((item, itemIndex) => itemIndex === index ? saved : item);
     }),
     removeBookmark: (bookmarkId) => setBookmarks((current) => current.filter((item) => item.id !== bookmarkId)),
-    saveProgress: (bookId, chapterId, percent) => setProgress((current) => ({ ...current, [bookId]: { chapterId, percent } })),
+    saveProgress,
     updateReaderPreferences: (preferences) => setReaderPreferences((current) => ({ ...current, ...preferences })),
-  }), [bookmarks, favorites, progress, readerPreferences, user]);
+  }), [bookmarks, favorites, progress, readerPreferences, user, saveProgress]);
 
   return <AppStore.Provider value={value}>{children}</AppStore.Provider>;
 }

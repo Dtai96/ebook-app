@@ -1,5 +1,4 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { BookCover } from '@/components/book/book-cover';
@@ -14,9 +13,11 @@ type LibraryTab = 'favorites' | 'bookmarks';
 export default function LibraryScreen() {
   const params = useLocalSearchParams<{ view?: LibraryTab }>();
   const { favorites, bookmarks, progress, removeBookmark } = useAppStore();
-  const [activeTab, setActiveTab] = useState<LibraryTab>(params.view === 'bookmarks' ? 'bookmarks' : 'favorites');
+  const activeTab = params.view === 'bookmarks' ? 'bookmarks' : 'favorites';
+  const setActiveTab = (view: LibraryTab) => router.setParams({ view });
   const savedBooks = books.filter((book) => favorites.includes(book.id));
-  const current = books.find((book) => progress[book.id]);
+  const recentBookId = Object.entries(progress).sort((a, b) => b[1].updatedAt - a[1].updatedAt)[0]?.[0];
+  const current = books.find((book) => book.id === recentBookId);
   const currentChapter = current ? getChapter(progress[current.id].chapterId).chapter : null;
 
   return (
@@ -40,7 +41,7 @@ export default function LibraryScreen() {
               <Text style={styles.currentTitle}>{current.title}</Text>
               <Text style={styles.currentChapter}>Chương {currentChapter.number} · {currentChapter.title}</Text>
               <View style={styles.track}><View style={[styles.fill, { width: `${progress[current.id].percent}%` }]} /></View>
-              <Text style={styles.percent}>{progress[current.id].percent}% hoàn thành</Text>
+              <Text style={styles.percent}>{progress[current.id].percent}% chương hiện tại</Text>
             </View>
             <View style={styles.roundButton}><AppIcon name="play" size={13} color={colors.white} /></View>
           </Pressable>
@@ -68,7 +69,7 @@ export default function LibraryScreen() {
           {bookmarks.map((bookmark) => {
             const { book, chapter } = getChapter(bookmark.chapterId);
             return (
-              <Pressable key={bookmark.id} onPress={() => router.push(`/reader/${bookmark.chapterId}`)} style={({ pressed }) => [styles.bookmarkCard, pressed && styles.pressed]}>
+              <Pressable key={bookmark.id} onPress={() => router.push({ pathname: '/reader/[id]', params: { id: bookmark.chapterId, percent: String(bookmark.percent), ...(bookmark.paragraphIndex !== undefined ? { paragraph: String(bookmark.paragraphIndex) } : {}) } })} style={({ pressed }) => [styles.bookmarkCard, pressed && styles.pressed]}>
                 <View style={styles.bookmarkTop}>
                   <View style={styles.bookmarkIcon}><AppIcon name="bookmarkFill" size={18} color={colors.coral} /></View>
                   <View style={styles.bookmarkHeading}><Text numberOfLines={1} style={styles.bookmarkBook}>{book.title}</Text><Text style={styles.bookmarkMeta}>Chương {chapter.number} · Vị trí {bookmark.percent}% · {bookmark.createdAt}</Text></View>

@@ -12,16 +12,17 @@ import { useAppStore } from '@/store/app-store';
 
 export default function HomeScreen() {
   const { progress, user } = useAppStore();
-  const currentBook = books.find((book) => progress[book.id]) ?? books[0];
+  const recentBookId = Object.entries(progress).sort((a, b) => b[1].updatedAt - a[1].updatedAt)[0]?.[0];
+  const currentBook = books.find((book) => book.id === recentBookId) ?? books[0];
   const currentProgress = progress[currentBook.id] ?? { chapterId: currentBook.chapters[0].id, percent: 0 };
   const currentChapter = currentBook.chapters.find((chapter) => chapter.id === currentProgress.chapterId) ?? currentBook.chapters[0];
   const firstName = user?.name.trim().split(' ').slice(-1)[0] ?? 'bạn';
   return (
     <Screen>
       <View style={styles.topbar}>
-        <View>
-          <Text style={styles.eyebrow}>THỨ NĂM, 10 THÁNG 9</Text>
-          <Text style={styles.greeting}>Chào buổi chiều, {firstName}</Text>
+        <View style={{ flex: 1, marginRight: 12 }}>
+          <Text style={styles.eyebrow}>{new Date().toLocaleDateString('vi-VN', { day: 'numeric', month: 'long' }).toUpperCase()}</Text>
+          <Text style={styles.greeting}>Chào {firstName}</Text>
         </View>
         <Pressable onPress={() => router.push('/(tabs)/profile')} style={styles.avatar}><Text style={styles.avatarText}>{user?.initials ?? 'MT'}</Text></Pressable>
       </View>
@@ -46,7 +47,7 @@ export default function HomeScreen() {
           <Text numberOfLines={2} style={styles.continueTitle}>{currentBook.title}</Text>
           <Text numberOfLines={1} style={styles.chapter}>{currentChapter.title}</Text>
           <View style={styles.progressTrack}><View style={[styles.progressFill, { width: `${currentProgress.percent}%` }]} /></View>
-          <View style={styles.progressMeta}><Text style={styles.progressText}>{currentProgress.percent}% hoàn thành</Text><View style={styles.play}><AppIcon name="play" size={13} color={colors.white} /></View></View>
+          <View style={styles.progressMeta}><Text style={styles.progressText}>{currentProgress.percent}% chương hiện tại</Text><View style={styles.play}><AppIcon name="play" size={13} color={colors.white} /></View></View>
         </View>
       </Pressable>
 
