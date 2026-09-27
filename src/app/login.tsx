@@ -5,27 +5,31 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AppIcon } from '@/components/ui/app-icon';
 import { colors, radii } from '@/constants/theme';
-import { useAppStore } from '@/store/app-store';
+import { useAuth } from '@/hooks/use-auth';
 
 export default function LoginScreen() {
-  const { signIn } = useAppStore();
+  const { signIn, initializing, sessionError } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const submit = () => {
+  const submit = async () => {
+    if (loading || initializing) return;
     const normalizedEmail = email.trim().toLowerCase();
     if (!/^\S+@\S+\.\S+$/.test(normalizedEmail)) return setError('Vui lòng nhập đúng địa chỉ email.');
-    if (password.length < 6) return setError('Mật khẩu cần có ít nhất 6 ký tự.');
+    if (!password) return setError('Vui lòng nhập mật khẩu.');
     setError('');
     setLoading(true);
-    setTimeout(() => {
-      signIn(normalizedEmail);
-      setLoading(false);
+    try {
+      await signIn(normalizedEmail, password);
       router.replace('/(tabs)/home');
-    }, 450);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Đăng nhập thất bại. Vui lòng thử lại.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -39,11 +43,11 @@ export default function LoginScreen() {
           <Text style={styles.label}>Email</Text>
           <TextInput value={email} onChangeText={setEmail} style={[styles.input, error && !email.includes('@') ? styles.inputError : null]} placeholder="ban@example.com" placeholderTextColor="#929790" keyboardType="email-address" autoCapitalize="none" autoComplete="email" />
           <Text style={styles.label}>Mật khẩu</Text>
-          <View style={[styles.password, error && password.length < 6 ? styles.inputError : null]}><TextInput value={password} onChangeText={setPassword} style={styles.passwordInput} placeholder="Nhập mật khẩu" placeholderTextColor="#929790" secureTextEntry={!showPassword} autoComplete="password" /><Pressable onPress={() => setShowPassword(!showPassword)}><Text style={styles.show}>{showPassword ? 'Ẩn' : 'Hiện'}</Text></Pressable></View>
+          <View style={[styles.password, error && !password ? styles.inputError : null]}><TextInput value={password} onChangeText={setPassword} style={styles.passwordInput} placeholder="Nhập mật khẩu" placeholderTextColor="#929790" secureTextEntry={!showPassword} autoComplete="password" /><Pressable onPress={() => setShowPassword(!showPassword)}><Text style={styles.show}>{showPassword ? 'Ẩn' : 'Hiện'}</Text></Pressable></View>
           {error ? <View style={styles.errorRow}><Text style={styles.errorIcon}>!</Text><Text style={styles.error}>{error}</Text></View> : null}
           <Pressable onPress={() => setError('Vui lòng liên hệ hỗ trợ để đặt lại mật khẩu.')}><Text style={styles.forgot}>Quên mật khẩu?</Text></Pressable>
-          <Pressable disabled={loading} onPress={submit} style={[styles.primary, loading && styles.disabled]}><Text style={styles.primaryText}>{loading ? 'Đang xác thực...' : 'Đăng nhập'}</Text></Pressable>
-          <View style={styles.demo}><AppIcon name="info" size={16} color={colors.moss} /><Text style={styles.demoText}>Bản giao diện: dùng email hợp lệ và mật khẩu từ 6 ký tự.</Text></View>
+          {sessionError && !error ? <Text style={styles.error}>{sessionError}</Text> : null}
+          <Pressable disabled={loading || initializing} onPress={submit} style={[styles.primary, (loading || initializing) && styles.disabled]}><Text style={styles.primaryText}>{initializing ? 'Đang khôi phục phiên...' : loading ? 'Đang xác thực...' : 'Đăng nhập'}</Text></Pressable>
           <View style={styles.footer}><Text style={styles.footerText}>Chưa có tài khoản? </Text><Pressable onPress={() => router.push('/register')}><Text style={styles.footerLink}>Đăng ký</Text></Pressable></View>
         </ScrollView>
       </KeyboardAvoidingView>

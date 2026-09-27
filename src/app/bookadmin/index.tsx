@@ -14,7 +14,9 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-const API_URL = "http://127.0.0.1:8000/api";
+import { apiRequest } from '@/services/api';
+
+const notify = (message: string) => Platform.OS === 'web' ? window.alert(message) : Alert.alert('Mộc Thư', message);
 
 type Book = {
   id: number;
@@ -53,13 +55,7 @@ export default function BookManagementScreen() {
       setLoading(true);
       setError(false);
 
-      const response = await fetch(`${API_URL}/books`);
-
-      if (!response.ok) {
-        throw new Error("Failed to fetch books");
-      }
-
-      const json = await response.json();
+      const json = await apiRequest<{ data: Book[] }>('/books');
 
       setBooks(json.data);
     } catch (error) {
@@ -118,12 +114,12 @@ export default function BookManagementScreen() {
 
   const saveBook = async () => {
     if (!title.trim()) {
-      window.alert("Title is required");
+      notify("Title is required");
       return;
     }
 
     if (!categoryId || !authorId) {
-      window.alert("Category ID and Author ID are required");
+      notify("Category ID and Author ID are required");
       return;
     }
 
@@ -137,45 +133,17 @@ export default function BookManagementScreen() {
       status,
     };
 
-    console.log("SENDING BOOK DATA:", body);
-
     try {
-      const url = editingBook
-        ? `${API_URL}/books/${editingBook.id}`
-        : `${API_URL}/books`;
-
-      const response = await fetch(url, {
+      await apiRequest(editingBook ? `/books/${editingBook.id}` : '/books', {
         method: editingBook ? "PUT" : "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json",
-        },
         body: JSON.stringify(body),
       });
-
-      const json = await response.json();
-
-      console.log("API RESPONSE:", json);
-
-      if (!response.ok) {
-        const errors = json.errors;
-
-        if (errors) {
-          const errorMessages = Object.values(errors).flat().join("\n");
-
-          window.alert(errorMessages);
-        } else {
-          window.alert(json.message || "Cannot save book");
-        }
-
-        return;
-      }
 
       setModalVisible(false);
 
       await fetchBooks();
 
-      window.alert(
+      notify(
         editingBook
           ? "Book updated successfully!"
           : "Book created successfully!",
@@ -183,7 +151,7 @@ export default function BookManagementScreen() {
     } catch (error) {
       console.error("SAVE BOOK ERROR:", error);
 
-      window.alert("Cannot connect to Laravel API");
+      notify(error instanceof Error ? error.message : "Cannot connect to Laravel API");
     }
   };
 
@@ -192,24 +160,7 @@ export default function BookManagementScreen() {
 
     const performDelete = async () => {
       try {
-        const url = `${API_URL}/books/${book.id}`;
-
-        console.log("DELETE URL:", url);
-
-        const response = await fetch(url, {
-          method: "DELETE",
-          headers: {
-            Accept: "application/json",
-          },
-        });
-
-        const result = await response.json();
-
-        console.log("DELETE RESPONSE:", result);
-
-        if (!response.ok) {
-          throw new Error(result.message || "Delete failed");
-        }
+        await apiRequest(`/books/${book.id}`, { method: 'DELETE' });
 
         // Cập nhật danh sách sau khi xóa thành công
         setBooks((prevBooks) =>
@@ -315,7 +266,7 @@ export default function BookManagementScreen() {
           <Text style={styles.stateTitle}>Something Went Wrong</Text>
 
           <Text style={styles.stateDescription}>
-            We couldn't load your books. Please check your internet connection
+            We couldn&apos;t load your books. Please check your internet connection
             and try again.
           </Text>
 

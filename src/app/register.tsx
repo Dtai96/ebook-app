@@ -5,32 +5,36 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AppIcon } from '@/components/ui/app-icon';
 import { colors, radii } from '@/constants/theme';
-import { useAppStore } from '@/store/app-store';
+import { useAuth } from '@/hooks/use-auth';
 
 export default function RegisterScreen() {
-  const { signUp } = useAppStore();
+  const { signUp, initializing } = useAuth();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmation, setConfirmation] = useState('');
   const [agreed, setAgreed] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const submit = () => {
-    if (loading) return;
+  const submit = async () => {
+    if (loading || initializing) return;
     const normalizedEmail = email.trim().toLowerCase();
     if (name.trim().length < 2) return setError('Vui lòng nhập họ tên của bạn.');
     if (!/^\S+@\S+\.\S+$/.test(normalizedEmail)) return setError('Email chưa đúng định dạng.');
-    if (normalizedEmail === 'duy.reader@example.com') return setError('Email này đã được đăng ký. Hãy dùng email khác.');
     if (password.length < 8) return setError('Mật khẩu cần có ít nhất 8 ký tự.');
+    if (password !== confirmation) return setError('Mật khẩu xác nhận chưa khớp.');
     if (!agreed) return setError('Bạn cần đồng ý với điều khoản để tiếp tục.');
     setError('');
     setLoading(true);
-    setTimeout(() => {
-      const message = signUp(name, normalizedEmail);
+    try {
+      await signUp(name, normalizedEmail, password, confirmation);
+      router.replace('/(tabs)/home');
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Đăng ký thất bại. Vui lòng thử lại.');
+    } finally {
       setLoading(false);
-      if (message) setError(message); else router.replace('/(tabs)/home');
-    }, 450);
+    }
   };
 
   return (
@@ -40,14 +44,15 @@ export default function RegisterScreen() {
           <Pressable accessibilityLabel="Đóng" onPress={() => router.back()} style={styles.close}><AppIcon name="close" size={30} /></Pressable>
           <Text style={styles.kicker}>BẮT ĐẦU HÀNH TRÌNH</Text>
           <Text style={styles.title}>Tạo góc đọc của bạn.</Text>
-          <Text style={styles.subtitle}>Trải nghiệm lưu sách, bookmark và AI Voice. Dữ liệu demo được giữ trong phiên sử dụng này.</Text>
+          <Text style={styles.subtitle}>Tạo tài khoản Mộc Thư để bắt đầu hành trình đọc của bạn.</Text>
           <Text style={styles.label}>Tên hiển thị</Text><TextInput value={name} onChangeText={setName} style={styles.input} placeholder="Tên của bạn" placeholderTextColor="#929790" autoComplete="name" />
           <Text style={styles.label}>Email</Text><TextInput value={email} onChangeText={setEmail} style={styles.input} placeholder="ban@example.com" placeholderTextColor="#929790" keyboardType="email-address" autoCapitalize="none" autoComplete="email" />
           <Text style={styles.label}>Mật khẩu</Text><TextInput value={password} onChangeText={setPassword} style={styles.input} placeholder="Ít nhất 8 ký tự" placeholderTextColor="#929790" secureTextEntry autoComplete="new-password" />
+          <Text style={styles.label}>Xác nhận mật khẩu</Text><TextInput value={confirmation} onChangeText={setConfirmation} style={styles.input} placeholder="Nhập lại mật khẩu" placeholderTextColor="#929790" secureTextEntry autoComplete="new-password" />
           <View style={styles.passwordHint}><View style={[styles.ruleDot, password.length >= 8 && styles.ruleDotDone]} /><Text style={styles.passwordHintText}>Tối thiểu 8 ký tự</Text></View>
           <Pressable accessibilityRole="checkbox" accessibilityLabel="Đồng ý điều khoản" accessibilityState={{ checked: agreed }} onPress={() => setAgreed(!agreed)} style={styles.agreement}><View style={[styles.checkbox, !agreed && styles.checkboxOff]}>{agreed ? <AppIcon name="check" size={13} color={colors.white} /> : null}</View><Text style={styles.agreementText}>Tôi đồng ý với Điều khoản sử dụng và Chính sách bảo mật.</Text></Pressable>
           {error ? <View style={styles.errorBox}><Text style={styles.error}>{error}</Text></View> : null}
-          <Pressable disabled={loading} onPress={submit} style={[styles.primary, loading && styles.disabled]}><Text style={styles.primaryText}>{loading ? 'Đang tạo tài khoản...' : 'Tạo tài khoản'}</Text></Pressable>
+          <Pressable disabled={loading || initializing} onPress={submit} style={[styles.primary, (loading || initializing) && styles.disabled]}><Text style={styles.primaryText}>{initializing ? 'Đang khôi phục phiên...' : loading ? 'Đang tạo tài khoản...' : 'Tạo tài khoản'}</Text></Pressable>
           <View style={styles.footer}><Text style={styles.footerText}>Đã có tài khoản? </Text><Pressable onPress={() => router.replace('/login')}><Text style={styles.footerLink}>Đăng nhập</Text></Pressable></View>
         </ScrollView>
       </KeyboardAvoidingView>

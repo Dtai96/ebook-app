@@ -7,9 +7,13 @@ import { Screen } from '@/components/screen';
 import { AppIcon } from '@/components/ui/app-icon';
 import { colors, radii } from '@/constants/theme';
 import { useAppStore } from '@/store/app-store';
+import { useAuth } from '@/hooks/use-auth';
 
 export default function ProfileScreen() {
-  const { bookmarks, readerPreferences, updateReaderPreferences, signOut, user } = useAppStore();
+  const { bookmarks, readerPreferences, updateReaderPreferences } = useAppStore();
+  const { signOut, user, isAdmin, initializing, sessionError } = useAuth();
+  const [loggingOut, setLoggingOut] = useState(false);
+  const [authError, setAuthError] = useState('');
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [notifications, setNotifications] = useState(true);
@@ -21,9 +25,18 @@ export default function ProfileScreen() {
   ];
   const displayUser = user ?? { name: 'Bạn đọc Mộc Thư', email: 'Chưa đăng nhập', initials: 'MT' };
 
-  const logout = () => {
-    signOut();
-    router.replace('/login');
+  const logout = async () => {
+    if (loggingOut || initializing) return;
+    setLoggingOut(true);
+    setAuthError('');
+    try {
+      await signOut();
+      router.replace('/login');
+    } catch (error) {
+      setAuthError(error instanceof Error ? error.message : 'Không thể đăng xuất.');
+    } finally {
+      setLoggingOut(false);
+    }
   };
 
   return (
@@ -56,7 +69,9 @@ export default function ProfileScreen() {
       </View>
       {helpOpen ? <Text style={styles.help}>Đọc sách từ Khám phá. Chạm giữ đoạn văn hoặc chọn biểu tượng bookmark để thêm ghi chú. AI Voice hiện là bản mô phỏng không có âm thanh. Dữ liệu được giữ trong phiên sử dụng.</Text> : null}
       <ReaderSettings visible={settingsOpen} onClose={() => setSettingsOpen(false)} fontSize={readerPreferences.fontSize} setFontSize={(fontSize) => updateReaderPreferences({ fontSize })} lineHeight={readerPreferences.lineHeight} setLineHeight={(lineHeight) => updateReaderPreferences({ lineHeight })} theme={readerPreferences.theme} setTheme={(theme) => updateReaderPreferences({ theme })} />
-      <Pressable onPress={logout} style={styles.logout}><Text style={styles.logoutText}>{user ? 'Đăng xuất' : 'Đăng nhập'}</Text></Pressable>
+      {isAdmin ? <Pressable onPress={() => router.push('/bookadmin')} style={styles.logout}><Text style={styles.logoutText}>Quản lý sách</Text></Pressable> : null}
+      {authError || sessionError ? <Text style={styles.help}>{authError || sessionError}</Text> : null}
+      <Pressable disabled={loggingOut || initializing} onPress={logout} style={styles.logout}><Text style={styles.logoutText}>{initializing ? 'Đang khôi phục phiên...' : loggingOut ? 'Đang đăng xuất...' : user ? 'Đăng xuất' : 'Đăng nhập'}</Text></Pressable>
       <Text style={styles.version}>Mộc Thư · Phiên bản giao diện 1.0</Text>
     </Screen>
   );

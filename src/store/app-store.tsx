@@ -1,8 +1,8 @@
-import { createContext, ReactNode, useCallback, useContext, useMemo, useRef, useState } from 'react';
+import { createContext, ReactNode, useCallback, useContext, useMemo, useState } from 'react';
 
 import type { ReaderTheme } from '@/components/reader/reader-settings';
 
-export type UserProfile = { name: string; email: string; initials: string };
+import { useAuth, type UserProfile } from '@/hooks/use-auth';
 export type ReadingProgress = { chapterId: string; percent: number; updatedAt: number };
 export type SavedBookmark = {
   id: string;
@@ -23,9 +23,6 @@ type AppState = {
   bookmarks: SavedBookmark[];
   progress: Record<string, ReadingProgress>;
   readerPreferences: ReaderPreferences;
-  signIn: (email: string) => void;
-  signUp: (name: string, email: string) => string | null;
-  signOut: () => void;
   toggleFavorite: (bookId: string) => void;
   saveBookmark: (bookmark: NewBookmark) => void;
   removeBookmark: (bookmarkId: string) => void;
@@ -35,12 +32,8 @@ type AppState = {
 
 const AppStore = createContext<AppState | null>(null);
 
-function initialsFromName(name: string) {
-  return name.trim().split(/\s+/).slice(-2).map((part) => part[0]?.toUpperCase()).join('') || 'MT';
-}
-
 export function AppStoreProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<UserProfile | null>({ name: 'Duy Trần', email: 'duy.reader@example.com', initials: 'DT' });
+  const { user } = useAuth();
   const [favorites, setFavorites] = useState(['khu-vuon-ben-o-cua', 'nghe-thuat-tap-trung']);
   const [bookmarks, setBookmarks] = useState<SavedBookmark[]>([
     {
@@ -58,7 +51,6 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   });
   const [readerPreferences, setReaderPreferences] = useState<ReaderPreferences>({ fontSize: 18, lineHeight: 1.72, theme: 'light', speed: 1 });
 
-  const accounts = useRef<Record<string, UserProfile>>({ 'duy.reader@example.com': { name: 'Duy Trần', email: 'duy.reader@example.com', initials: 'DT' } });
   const saveProgress = useCallback((bookId: string, chapterId: string, percent: number) => {
     const safePercent = Math.max(0, Math.min(100, Number.isFinite(percent) ? Math.round(percent) : 0));
     setProgress((current) => ({ ...current, [bookId]: { chapterId, percent: safePercent, updatedAt: Date.now() } }));
@@ -70,22 +62,6 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     bookmarks,
     progress,
     readerPreferences,
-    signIn: (email) => {
-      const existing = accounts.current[email.trim().toLowerCase()];
-      if (existing) { setUser(existing); return; }
-      const localName = email.split('@')[0].replace(/[._-]+/g, ' ');
-      const name = localName.replace(/\b\w/g, (letter) => letter.toUpperCase()) || 'Bạn đọc';
-      setUser({ name, email, initials: initialsFromName(name) });
-    },
-    signUp: (name, email) => {
-      const normalizedEmail = email.trim().toLowerCase();
-      if (accounts.current[normalizedEmail]) return 'Email này đã được đăng ký. Hãy dùng email khác.';
-      const profile = { name: name.trim(), email: normalizedEmail, initials: initialsFromName(name) };
-      accounts.current[normalizedEmail] = profile;
-      setUser(profile);
-      return null;
-    },
-    signOut: () => setUser(null),
     toggleFavorite: (bookId) => setFavorites((current) => current.includes(bookId) ? current.filter((id) => id !== bookId) : [...current, bookId]),
     saveBookmark: (bookmark) => setBookmarks((current) => {
       const index = current.findIndex((item) => item.chapterId === bookmark.chapterId && (bookmark.paragraphIndex !== undefined ? item.paragraphIndex === bookmark.paragraphIndex : item.percent === bookmark.percent));

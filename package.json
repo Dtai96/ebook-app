@@ -12,6 +12,7 @@
     "expo-image": "~57.0.4",
     "expo-linking": "~57.0.9",
     "expo-router": "~57.0.20",
+    "expo-secure-store": "~57.0.4",
     "expo-splash-screen": "~57.0.8",
     "expo-status-bar": "~57.0.1",
     "expo-symbols": "~57.0.2",
@@ -39,7 +40,8 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "lint": "eslint src"
+    "lint": "eslint src",
+    "test": "node --test tests/*.test.cjs"
   },
   "private": true
 }
