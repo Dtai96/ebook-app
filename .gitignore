@@ -1,7 +1,11 @@
 # Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
 
 # dependencies
-node_modules/
+node_modules/*
+!node_modules/@expo/
+node_modules/@expo/*
+!node_modules/@expo/vector-icons/
+!node_modules/@expo/vector-icons/**
 
 # Expo
 .expo/
