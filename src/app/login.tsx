@@ -1,19 +1,31 @@
 import { router } from 'expo-router';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import type { TextStyle } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AppIcon } from '@/components/ui/app-icon';
 import { colors, radii } from '@/constants/theme';
 import { useAuth } from '@/hooks/use-auth';
 
+const webPasswordInputReset = Platform.OS === 'web'
+  ? ({ outlineStyle: 'none' } as unknown as TextStyle)
+  : undefined;
+
 export default function LoginScreen() {
   const { signIn, initializing, sessionError } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [passwordFocused, setPasswordFocused] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const passwordInputRef = useRef<TextInput>(null);
+
+  const togglePasswordVisibility = () => {
+    setShowPassword((visible) => !visible);
+    requestAnimationFrame(() => passwordInputRef.current?.focus());
+  };
 
   const submit = async () => {
     if (loading || initializing) return;
@@ -43,7 +55,7 @@ export default function LoginScreen() {
           <Text style={styles.label}>Email</Text>
           <TextInput value={email} onChangeText={setEmail} style={[styles.input, error && !email.includes('@') ? styles.inputError : null]} placeholder="ban@example.com" placeholderTextColor="#929790" keyboardType="email-address" autoCapitalize="none" autoComplete="email" />
           <Text style={styles.label}>Mật khẩu</Text>
-          <View style={[styles.password, error && !password ? styles.inputError : null]}><TextInput value={password} onChangeText={setPassword} style={styles.passwordInput} placeholder="Nhập mật khẩu" placeholderTextColor="#929790" secureTextEntry={!showPassword} autoComplete="password" /><Pressable onPress={() => setShowPassword(!showPassword)}><Text style={styles.show}>{showPassword ? 'Ẩn' : 'Hiện'}</Text></Pressable></View>
+          <View style={[styles.password, passwordFocused ? styles.inputFocused : null, error && !password ? styles.inputError : null]}><TextInput ref={passwordInputRef} value={password} onChangeText={setPassword} onFocus={() => setPasswordFocused(true)} onBlur={() => setPasswordFocused(false)} style={[styles.passwordInput, webPasswordInputReset]} placeholder="Nhập mật khẩu" placeholderTextColor="#929790" secureTextEntry={!showPassword} autoComplete="password" underlineColorAndroid="transparent" /><Pressable accessibilityRole="button" accessibilityLabel={showPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'} hitSlop={8} onPress={togglePasswordVisibility} style={styles.showButton}><Text style={styles.show}>{showPassword ? 'Ẩn' : 'Hiện'}</Text></Pressable></View>
           {error ? <View style={styles.errorRow}><Text style={styles.errorIcon}>!</Text><Text style={styles.error}>{error}</Text></View> : null}
           <Pressable onPress={() => setError('Vui lòng liên hệ hỗ trợ để đặt lại mật khẩu.')}><Text style={styles.forgot}>Quên mật khẩu?</Text></Pressable>
           {sessionError && !error ? <Text style={styles.error}>{sessionError}</Text> : null}
@@ -66,9 +78,12 @@ const styles = StyleSheet.create({
   subtitle: { color: colors.inkSoft, fontSize: 14, marginTop: 9, marginBottom: 25 },
   label: { color: colors.ink, fontSize: 12, fontWeight: '700', marginBottom: 8, marginTop: 15 },
   input: { height: 54, backgroundColor: colors.surface, borderRadius: radii.md, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 15, color: colors.ink, fontSize: 14 },
+  inputFocused: { borderColor: colors.moss, borderWidth: 2 },
   inputError: { borderColor: colors.danger },
   password: { height: 54, backgroundColor: colors.surface, borderRadius: radii.md, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 15, flexDirection: 'row', alignItems: 'center' },
-  passwordInput: { flex: 1, color: colors.ink, fontSize: 14 }, show: { color: colors.moss, fontSize: 12, fontWeight: '800' },
+  passwordInput: { flex: 1, height: '100%', borderWidth: 0, outlineWidth: 0, paddingVertical: 0, color: colors.ink, fontSize: 14, backgroundColor: 'transparent' },
+  showButton: { minWidth: 44, height: 44, alignItems: 'flex-end', justifyContent: 'center' },
+  show: { color: colors.moss, fontSize: 12, fontWeight: '800' },
   errorRow: { flexDirection: 'row', alignItems: 'center', gap: 7, marginTop: 10 },
   errorIcon: { width: 18, height: 18, borderRadius: 9, backgroundColor: '#F3DEDB', color: colors.danger, textAlign: 'center', lineHeight: 18, fontSize: 11, fontWeight: '900' },
   error: { color: colors.danger, fontSize: 11 },
