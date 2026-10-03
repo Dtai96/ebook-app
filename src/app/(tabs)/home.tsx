@@ -1,6 +1,6 @@
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View , ActivityIndicator} from 'react-native';
 
 import { BookCard } from '@/components/book/book-card';
 import { BookCover } from '@/components/book/book-cover';
@@ -57,8 +57,7 @@ export default function HomeScreen() {
         <Text style={styles.searchText}>Tìm tên sách, tác giả...</Text>
       </Pressable>
 
-      {loading ? <Text style={styles.status}>Đang tải sách...</Text> : null}
-      {error ? <Pressable onPress={() => { setLoading(true); setReload((value) => value + 1); }}><Text style={styles.status}>{error} · Chạm để thử lại</Text></Pressable> : null}
+      
       <View style={styles.heroHeader}>
         <View>
           <Text style={styles.heroKicker}>{currentChapter ? 'ĐỌC TIẾP' : 'BẮT ĐẦU ĐỌC'}</Text>
@@ -76,39 +75,58 @@ export default function HomeScreen() {
           <View style={styles.progressMeta}><Text style={styles.progressText}>{currentProgress.percent}% chương hiện tại</Text><View style={styles.play}><AppIcon name="play" size={13} color={colors.white} /></View></View>
         </View>
       </Pressable> : !loading && !error ? <Pressable onPress={() => router.push('/(tabs)/search')} style={styles.continueCard}><Text style={styles.continueTitle}>Chọn một cuốn sách để bắt đầu đọc</Text></Pressable> : null}
+      
+      {loading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.moss} />
+          <Text style={styles.status}>Đang tải sách...</Text>
+        </View>
+      ) : error ? (
+      <View style={styles.loadingContainer}>
+        <Text style={styles.status}>{error}</Text>
+        <Pressable style={styles.retryButton} onPress={() => { setLoading(true); setReload((value) => value + 1); }}><Text style={styles.retryText}>Thử lại</Text></Pressable>
+      </View>) : null}
+      
+      {!loading && !error ? (
+        <>
+        <View style={styles.section}>
+          <SectionHeader title="Khám phá theo chủ đề" />
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryRow}>
+            {categories.map((category) => (
+              <Pressable key={category.id} onPress={() => router.push({ pathname: '/(tabs)/search', params: { categoryId: String(category.id) } })} style={styles.category}>
+                <Text style={styles.categoryText}>{category.name}</Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+        </View>
 
-      <View style={styles.section}>
-        <SectionHeader title="Khám phá theo chủ đề" />
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryRow}>
-          {categories.map((category) => (
-            <Pressable key={category.id} onPress={() => router.push({ pathname: '/(tabs)/search', params: { categoryId: String(category.id) } })} style={styles.category}>
-              <Text style={styles.categoryText}>{category.name}</Text>
-            </Pressable>
-          ))}
-        </ScrollView>
-      </View>
+        <View style={styles.section}>
+          <SectionHeader title="Xem nhiều" action="Xem tất cả" onAction={() => router.push({ pathname: '/(tabs)/search', params: { sort: 'popular' } })} />
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.bookRow}>
+            {popularBooks.map((book) => <BookCard key={book.id} book={book} />)}
+          </ScrollView>
+        </View>
 
-      <View style={styles.section}>
-        <SectionHeader title="Xem nhiều" action="Xem tất cả" onAction={() => router.push({ pathname: '/(tabs)/search', params: { sort: 'popular' } })} />
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.bookRow}>
-          {popularBooks.map((book) => <BookCard key={book.id} book={book} />)}
-        </ScrollView>
-      </View>
+        <View style={styles.section}>
+          <SectionHeader title="Mới trên Mộc Thư" action="Khám phá" onAction={() => router.push('/(tabs)/search')} />
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.bookRow}>
+            {newBooks.map((book) => <BookCard key={book.id} book={book} />)}
+          </ScrollView>
+        </View>
 
-      <View style={styles.section}>
-        <SectionHeader title="Mới trên Mộc Thư" action="Khám phá" onAction={() => router.push('/(tabs)/search')} />
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.bookRow}>
-          {newBooks.map((book) => <BookCard key={book.id} book={book} />)}
-        </ScrollView>
-      </View>
-
-      {!loading && !error && !newBooks.length ? <Text style={styles.status}>Chưa có sách trong thư viện. Hãy nhập sách ở backend trước.</Text> : null}
+        {!loading && !error && !newBooks.length ? <Text style={styles.status}>Chưa có sách trong thư viện. Hãy nhập sách ở backend trước.</Text> : null}
+        </>
+      ) : null}
+      
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  status: { color: colors.inkSoft, paddingVertical: 16 },
+  loadingContainer: {flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: colors.paper, paddingTop: 150 },
+  status: { color: colors.inkSoft, paddingVertical: 16, fontSize: 17 },
+  retryButton: { backgroundColor: colors.moss, paddingHorizontal: 20, paddingVertical: 12, borderRadius: radii.md },
+  retryText: { color: colors.paper, fontSize: 14, fontWeight: "700" },
   topbar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: 8, marginBottom: 22 },
   eyebrow: { color: colors.coral, fontSize: 10, fontWeight: '800', letterSpacing: 1.3 },
   greeting: { color: colors.ink, fontSize: 25, fontWeight: '800', letterSpacing: -0.6, marginTop: 5 },

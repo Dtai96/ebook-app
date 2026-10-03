@@ -1,6 +1,6 @@
 import { useLocalSearchParams, router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View, ActivityIndicator } from 'react-native';
 
 import { BookCover } from '@/components/book/book-cover';
 import { Screen } from '@/components/screen';
@@ -99,20 +99,49 @@ export default function SearchScreen() {
         <Text style={styles.resultTitle}>{query.trim() ? `Kết quả theo ${searchBy === 'title' ? 'tên sách' : 'tác giả'}` : params.sort === 'popular' ? 'Sách xem nhiều' : 'Tất cả sách'}</Text>
         <Text style={styles.count}>{total} sách</Text>
       </View>
-      {error ? <Pressable onPress={() => { setLoading(true); setReload((value) => value + 1); }}><Text style={styles.emptyText}>{error} · Chạm để thử lại</Text></Pressable> : null}
-      {loading && page === 1 ? <Text style={styles.emptyText}>Đang tải sách...</Text> : null}
+
+      {loading && page === 1 ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.moss} />
+          <Text style={styles.emptyText}>Đang tải sách...</Text>
+        </View>
+        
+      ) : error ? (
+        <View style={styles.loadingContainer}>
+          <Text style={styles.emptyText}>{error}</Text>
+          <Pressable style={styles.retryButton} onPress={() => {setLoading(true); setReload((value) => value + 1);}}><Text style={styles.retryText}>Thử lại</Text></Pressable>
+        </View>
+      ) : null}
+
       {books.map((book) => (
-        <Pressable key={book.id} onPress={() => router.push(`/book/${book.id}`)} style={({ pressed }) => [styles.result, pressed && styles.pressed]}>
+        <Pressable
+          key={book.id}
+          onPress={() => router.push(`/book/${book.id}`)}
+          style={({ pressed }) => [styles.result, pressed && styles.pressed]}
+        >
           <BookCover book={book} width={76} elevated={false} />
           <View style={styles.resultBody}>
             <Text style={styles.bookCategory}>{book.category.toUpperCase()}</Text>
             <Text style={styles.bookTitle}>{book.title}</Text>
             <Text style={styles.author}>bởi {book.author}</Text>
-            <View style={styles.stats}><Text style={styles.time}>{book.chaptersCount} chương</Text></View>
+            <View style={styles.stats}>
+              <Text style={styles.time}>{book.chaptersCount} chương</Text>
+            </View>
           </View>
           <AppIcon name="chevron" color={colors.inkSoft} />
         </Pressable>
       ))}
+
+      {!books.length && !loading && !error ? (
+        <View style={styles.empty}>
+          <Text style={styles.emptyIcon}>⌕</Text>
+          <Text style={styles.emptyTitle}>Chưa tìm thấy cuốn sách phù hợp</Text>
+          <Text style={styles.emptyText}>
+            Thử tên {searchBy === 'title' ? 'sách' : 'tác giả'} khác hoặc đổi chủ đề nhé.
+          </Text>
+        </View>
+      ) : null}
+
       {!books.length && !loading && !error ? (
         <View style={styles.empty}><Text style={styles.emptyIcon}>⌕</Text><Text style={styles.emptyTitle}>Chưa tìm thấy cuốn sách phù hợp</Text><Text style={styles.emptyText}>Thử tên {searchBy === 'title' ? 'sách' : 'tác giả'} khác hoặc đổi chủ đề nhé.</Text></View>
       ) : null}
@@ -132,8 +161,8 @@ const styles = StyleSheet.create({
   searchModeTextActive: { color: colors.white },
   searchBox: { marginTop: 14, height: 54, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: radii.md, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 15, gap: 10 },
   input: { flex: 1, color: colors.ink, fontSize: 15, paddingVertical: 10 },
-  filters: { gap: 9, paddingVertical: 18 },
-  filter: { paddingHorizontal: 15, paddingVertical: 9, borderRadius: radii.pill, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
+  filters: { flexDirection: 'row', alignItems: 'center', gap: 9, paddingTop: 9 },
+  filter: { height: 42, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 19, borderRadius: radii.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
   filterActive: { backgroundColor: colors.moss, borderColor: colors.moss },
   filterText: { color: colors.inkSoft, fontSize: 12, fontWeight: '600' },
   filterTextActive: { color: colors.white },
@@ -153,5 +182,8 @@ const styles = StyleSheet.create({
   empty: { alignItems: 'center', paddingVertical: 70 },
   emptyIcon: { color: colors.sage, fontSize: 52 },
   emptyTitle: { color: colors.ink, fontSize: 17, fontWeight: '800', marginTop: 12 },
-  emptyText: { color: colors.inkSoft, fontSize: 13, marginTop: 7 },
+  emptyText: { color: colors.inkSoft, fontSize: 17, marginTop: 7 },
+  loadingContainer: {flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: colors.paper, paddingTop: 120 },
+  retryButton: { backgroundColor: colors.moss, paddingHorizontal: 20, paddingVertical: 12, borderRadius: radii.md },
+  retryText: { color: colors.paper, fontSize: 14, fontWeight: "700" },
 });
