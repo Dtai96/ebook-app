@@ -11,7 +11,7 @@ const { outputText } = ts.transpileModule(readFileSync(filename, 'utf8'), {
 });
 
 const book = {
-  id: 42, title: 'Pride and Prejudice', description: 'A novel', cover_url: 'http://example.test/storage/cover.jpg',
+  id: 42, title: 'Pride and Prejudice', description: 'A novel', cover_url: 'http://example.test/storage/cover.jpg', language: 'en',
   view_count: 7, chapters_count: 2, author: { name: 'Jane Austen' }, category: { id: 3, name: 'Classics' },
   chapters: [{ id: 90, book_id: 42, number: 1, title: 'Chapter One' }],
 };
@@ -35,6 +35,7 @@ test('home maps real books, author names, covers, and categories', async () => {
   const home = await bookApi.home();
   assert.equal(requests[0], '/home');
   assert.equal(home.newBooks[0].author, 'Jane Austen');
+  assert.equal(home.newBooks[0].language, 'en');
   assert.equal(home.newBooks[0].coverUrl, book.cover_url);
   assert.equal(home.popularBooks[0].chaptersCount, 2);
   assert.equal(home.categories[0].booksCount, 1);

@@ -131,7 +131,7 @@ function ReaderChapter({ book, chapter, percent, paragraph }: { book: Book; chap
         <View style={[styles.toolbar, shadows.card, { backgroundColor: readerPreferences.theme === 'dark' ? '#343C36' : colors.ink }]}>
           <Pressable onPress={() => setSettingsOpen(true)} style={styles.tool}><AppIcon name="settings" color={colors.white} /><Text style={styles.toolLabel}>Hiển thị</Text></Pressable>
           <View style={styles.toolbarDivider} />
-          <Pressable onPress={() => setPlayerOpen(true)} style={styles.voiceButton}><View style={styles.voiceIcon}><AppIcon name="spark" size={14} color={colors.white} /></View><View><Text style={styles.voiceTitle}>Nghe AI Voice</Text><Text style={styles.voiceSubtitle}>Giọng An · {readerPreferences.speed}x</Text></View></Pressable>
+          <Pressable disabled={!/^en(?:-|$)/i.test(book.language)} onPress={() => setPlayerOpen(true)} style={[styles.voiceButton, !/^en(?:-|$)/i.test(book.language) && styles.disabled]}><View style={styles.voiceIcon}><AppIcon name="spark" size={14} color={colors.white} /></View><View><Text style={styles.voiceTitle}>Nghe AI Voice</Text><Text style={styles.voiceSubtitle}>{/^en(?:-|$)/i.test(book.language) ? `English · ${readerPreferences.speed}x` : 'Chưa hỗ trợ ngôn ngữ này'}</Text></View></Pressable>
           <View style={styles.progressCircle}><Text style={styles.progressNumber}>{readingPercent}%</Text></View>
         </View>
       </View>

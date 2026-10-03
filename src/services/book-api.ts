@@ -3,7 +3,7 @@ import type { Book, BookCategory, Chapter } from '@/types/book';
 
 type ApiChapter = { id: number; book_id: number; number: number; title: string; content?: string };
 type ApiBook = {
-  id: number; title: string; description: string | null; cover_url: string | null;
+  id: number; title: string; description: string | null; cover_url: string | null; language: string;
   view_count: number; chapters_count: number;
   author: { name: string }; category: { id: number; name: string };
   chapters?: ApiChapter[];
@@ -18,7 +18,7 @@ const mapChapter = (chapter: ApiChapter): Chapter => ({
 });
 
 const mapBook = (book: ApiBook): Book => ({
-  id: String(book.id), title: book.title, author: book.author?.name ?? '',
+  id: String(book.id), title: book.title, author: book.author?.name ?? '', language: book.language,
   category: book.category?.name ?? '', categoryId: book.category?.id ?? 0,
   description: book.description ?? '', coverUrl: book.cover_url,
   viewCount: book.view_count, chaptersCount: book.chapters_count,

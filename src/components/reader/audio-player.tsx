@@ -1,18 +1,16 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { setAudioModeAsync, useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import { Modal, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BookCover } from '@/components/book/book-cover';
 import { AppIcon } from '@/components/ui/app-icon';
 import { colors, radii } from '@/constants/theme';
+import { AudioSegment, ttsApi } from '@/services/tts-api';
 import { Book, Chapter } from '@/types/book';
 
 const speeds = [0.75, 1, 1.25, 1.5, 2];
 const timerOptions = [0, 15, 30];
-function chapterDuration(chapter: Chapter) {
-  return Math.max(60, Math.ceil(chapter.content.join(' ').split(/\s+/).length / 180) * 60);
-}
-
 function formatTime(seconds: number) {
   const safe = Math.max(0, Math.round(seconds));
   return `${String(Math.floor(safe / 60)).padStart(2, '0')}:${String(safe % 60).padStart(2, '0')}`;
@@ -27,74 +25,196 @@ export function AudioPlayer({ visible, onClose, book, chapter: initialChapter, s
   setSpeed: (speed: number) => void;
 }) {
   const insets = useSafeAreaInsets();
-  const [playback, setPlayback] = useState({
-    chapterIndex: Math.max(0, book.chapters.findIndex((item) => item.id === initialChapter.id)),
-    position: 0, playing: false, timerMinutes: 0, timerSeconds: 0, stopAtChapterEnd: false, autoNext: true,
-  });
-  const { position, playing, timerMinutes, timerSeconds, stopAtChapterEnd, autoNext } = playback;
-  const chapter = book.chapters[playback.chapterIndex];
-  const duration = chapterDuration(chapter);
-  const hasNextChapter = playback.chapterIndex < book.chapters.length - 1;
-  const chunks = useMemo(() => chapter.content.flatMap((paragraph) => paragraph.match(/.{1,280}(?:\s|$)|.{1,280}/g) ?? []), [chapter.content]);
-  const chunkNumber = Math.min(chunks.length, Math.floor(position / duration * chunks.length) + 1);
+  const [chapterIndex, setChapterIndex] = useState(Math.max(0, book.chapters.findIndex((item) => item.id === initialChapter.id)));
+  const [timerMinutes, setTimerMinutes] = useState(0);
+  const [timerSeconds, setTimerSeconds] = useState(0);
+  const [timerExpired, setTimerExpired] = useState(false);
+  const [stopAtChapterEnd, setStopAtChapterEnd] = useState(false);
+  const [autoNext, setAutoNext] = useState(true);
+  const [segments, setSegments] = useState<AudioSegment[]>([]);
+  const [segmentIndex, setSegmentIndex] = useState(0);
+  const [generationStatus, setGenerationStatus] = useState('queued');
+  const [waitingForNext, setWaitingForNext] = useState(false);
+  const [error, setError] = useState('');
+  const [retry, setRetry] = useState(0);
+  const player = useAudioPlayer(null, { updateInterval: 250 });
+  const status = useAudioPlayerStatus(player);
+  const finishedSegment = useRef<string | null>(null);
+  const currentIndexRef = useRef(0);
+  const waitingRef = useRef(false);
+  const segmentsRef = useRef<AudioSegment[]>([]);
+  const generationRef = useRef('queued');
+  const playbackOptionsRef = useRef({ autoNext, stopAtChapterEnd, timerExpired, chapterIndex, hasNextChapter: false });
+  const chapter = book.chapters[chapterIndex];
+  const hasNextChapter = chapterIndex < book.chapters.length - 1;
+  useEffect(() => {
+    playbackOptionsRef.current = { autoNext, stopAtChapterEnd, timerExpired, chapterIndex, hasNextChapter };
+  }, [autoNext, stopAtChapterEnd, timerExpired, chapterIndex, hasNextChapter]);
+  const currentSegment = segments[segmentIndex];
+  const audioUrl = currentSegment?.audio_url ?? null;
+  const readyCount = segments.filter((segment) => segment.audio_url).length;
+  const position = audioUrl ? status.currentTime : 0;
+  const duration = audioUrl ? (status.duration || currentSegment.duration || 0) : 0;
+  const playing = Boolean(audioUrl && status.playing);
+  const words = useMemo(() => currentSegment?.text.trim().split(/\s+/).filter(Boolean) ?? [], [currentSegment?.text]);
+  const totalWeight = words.reduce((sum, word) => sum + Math.max(1, word.replace(/[^a-z0-9]/gi, '').length), 0);
+  const spokenWeight = totalWeight * (duration > 0 ? Math.min(1, position / duration) : 0);
+  let elapsedWeight = 0;
+  const estimatedWord = Math.max(0, words.findIndex((word) => {
+    elapsedWeight += Math.max(1, word.replace(/[^a-z0-9]/gi, '').length);
+    return elapsedWeight > spokenWeight;
+  }));
+  const hasWordTimings = currentSegment?.word_starts?.length === words.length;
+  let activeWord = estimatedWord;
+  if (hasWordTimings) {
+    activeWord = 0;
+    currentSegment.word_starts!.forEach((start, index) => { if (start <= position + 0.03) activeWord = index; });
+  }
+  const wordWindowStart = Math.max(0, activeWord - 12);
+  const wordWindowEnd = Math.min(words.length, activeWord + 18);
+
+  useEffect(() => {
+    if (!visible) { player.pause(); return; }
+    setAudioModeAsync({ playsInSilentMode: true }).catch(() => {});
+  }, [player, visible]);
+
+  const selectSegment = useCallback((index: number) => {
+    currentIndexRef.current = index;
+    waitingRef.current = false;
+    setWaitingForNext(false);
+    setSegmentIndex(index);
+  }, []);
+
+  const selectChapter = useCallback((index: number) => {
+    player.pause();
+    setSegments([]);
+    setSegmentIndex(0);
+    setGenerationStatus('queued');
+    setWaitingForNext(false);
+    setError('');
+    currentIndexRef.current = 0;
+    waitingRef.current = false;
+    segmentsRef.current = [];
+    generationRef.current = 'queued';
+    finishedSegment.current = null;
+    setChapterIndex(index);
+  }, [player]);
+
+  const finishChapter = useCallback(() => {
+    const options = playbackOptionsRef.current;
+    if (options.autoNext && !options.stopAtChapterEnd && !options.timerExpired && options.hasNextChapter) {
+      selectChapter(options.chapterIndex + 1);
+    }
+  }, [selectChapter]);
 
   useEffect(() => {
     if (!visible) return;
-    let lastTick = Date.now();
-    const interval = setInterval(() => {
-      const now = Date.now();
-      const elapsed = (now - lastTick) / 1000;
-      lastTick = now;
-      setPlayback((current) => {
-        if (!current.playing) return current;
-        const remaining = Math.max(0, current.timerSeconds - elapsed);
-        // The sleep timer measures listening time, independently of playback speed.
-        const audibleElapsed = current.timerSeconds > 0 ? Math.min(elapsed, current.timerSeconds) : elapsed;
-        const chapterLength = chapterDuration(book.chapters[current.chapterIndex]);
-        const nextPosition = Math.min(chapterLength, current.position + audibleElapsed * speed);
-        const timerExpired = current.timerSeconds > 0 && remaining === 0;
-        const atEnd = nextPosition >= chapterLength;
-        if (atEnd && current.autoNext && !current.stopAtChapterEnd && !timerExpired && current.chapterIndex < book.chapters.length - 1) {
-          return { ...current, chapterIndex: current.chapterIndex + 1, position: 0, timerSeconds: remaining };
+    let active = true;
+    let poll: ReturnType<typeof setTimeout>;
+    const check = async (start: boolean) => {
+      try {
+        const result = start ? await ttsApi.createAudio(chapter.id) : await ttsApi.status(chapter.id);
+        if (!active) return;
+        segmentsRef.current = result.data.segments;
+        generationRef.current = result.data.status;
+        setSegments(result.data.segments);
+        setGenerationStatus(result.data.status);
+        setError('');
+        if (waitingRef.current) {
+          const nextIndex = currentIndexRef.current + 1;
+          if (result.data.segments[nextIndex]?.audio_url) selectSegment(nextIndex);
+          else if (result.data.status === 'ready' && nextIndex === result.data.segments.length) {
+            waitingRef.current = false;
+            setWaitingForNext(false);
+            finishChapter();
+          }
         }
-        return { ...current, position: nextPosition, timerSeconds: remaining,
-          timerMinutes: timerExpired ? 0 : current.timerMinutes,
-          playing: !timerExpired && !atEnd };
-      });
-    }, 250);
-    return () => clearInterval(interval);
-  }, [book.chapters, speed, visible]);
+        if (result.data.status !== 'ready') poll = setTimeout(() => check(false), 2000);
+      } catch (cause) {
+        if (active) setError(cause instanceof Error ? cause.message : 'Không thể tạo âm thanh.');
+      }
+    };
+    check(true);
+    return () => { active = false; clearTimeout(poll); };
+  }, [chapter.id, finishChapter, retry, selectSegment, visible]);
+
+  useEffect(() => {
+    if (!audioUrl || !visible) return;
+    finishedSegment.current = null;
+    player.replace(audioUrl);
+    player.play();
+  }, [audioUrl, player, visible]);
+
+  useEffect(() => { if (audioUrl) player.setPlaybackRate(speed); }, [audioUrl, player, speed]);
+
+  useEffect(() => {
+    if (!visible || !playing || timerSeconds <= 0) return;
+    const timer = setTimeout(() => {
+      if (timerSeconds <= 1) {
+        player.pause();
+        setTimerMinutes(0);
+        setTimerExpired(true);
+        setTimerSeconds(0);
+      } else {
+        setTimerSeconds(timerSeconds - 1);
+      }
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [player, playing, timerSeconds, visible]);
+
+  useEffect(() => {
+    const listener = player.addListener('playbackStatusUpdate', (update) => {
+      const index = currentIndexRef.current;
+      const marker = `${chapter.id}:${index}`;
+      if (!update.didJustFinish || finishedSegment.current === marker) return;
+      finishedSegment.current = marker;
+      if (segmentsRef.current[index + 1]?.audio_url) selectSegment(index + 1);
+      else if (generationRef.current === 'ready' && index === segmentsRef.current.length - 1) finishChapter();
+      else { waitingRef.current = true; setWaitingForNext(true); }
+    });
+    return () => listener.remove();
+  }, [chapter.id, finishChapter, player, selectSegment]);
 
   const close = () => {
-    setPlayback((current) => ({ ...current, playing: false }));
+    player.pause();
     onClose(chapter.id);
   };
-  const seek = (seconds: number) => setPlayback((current) => ({ ...current, position: Math.min(duration, Math.max(0, current.position + seconds)) }));
-  const togglePlaying = () => setPlayback((current) => ({ ...current, playing: !current.playing, position: current.position >= duration ? 0 : current.position }));
-  const onNextChapter = () => setPlayback((current) => current.chapterIndex >= book.chapters.length - 1 ? current : { ...current, chapterIndex: current.chapterIndex + 1, position: 0 });
-  const selectTimer = (minutes: number) => setPlayback((current) => ({ ...current, timerMinutes: minutes, timerSeconds: minutes * 60, stopAtChapterEnd: false }));
-  const progress = `${Math.round(position / duration * 100)}%` as `${number}%`;
+  const seek = (seconds: number) => player.seekTo(Math.min(duration, Math.max(0, position + seconds)));
+  const togglePlaying = () => {
+    if (playing) player.pause();
+    else { if (duration > 0 && position >= duration) player.seekTo(0); player.play(); }
+  };
+  const onNextChapter = () => { if (hasNextChapter) selectChapter(chapterIndex + 1); };
+  const selectTimer = (minutes: number) => { setTimerMinutes(minutes); setTimerSeconds(minutes * 60); setTimerExpired(false); setStopAtChapterEnd(false); };
+  const progress = `${duration > 0 ? Math.round(position / duration * 100) : 0}%` as `${number}%`;
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={close}>
       <View style={[styles.page, { paddingTop: insets.top + 8, paddingBottom: Math.max(insets.bottom, 20) }]}>
         <View style={styles.nav}><Pressable accessibilityLabel="Đóng trình phát" onPress={close} style={styles.close}><AppIcon name="close" size={30} /></Pressable><Text style={styles.navTitle}>AI Voice</Text><View style={styles.close} /></View>
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
-          <View style={styles.spark}><AppIcon name="spark" size={15} color={colors.coral} /><Text style={styles.sparkText}>GIỌNG ĐỌC AI · TIẾNG VIỆT</Text></View>
+          <View style={styles.spark}><AppIcon name="spark" size={15} color={colors.coral} /><Text style={styles.sparkText}>GIỌNG ĐỌC AI · TIẾNG ANH</Text></View>
           <BookCover book={book} width={146} />
           <Text style={styles.chapter}>CHƯƠNG {chapter.number}</Text>
           <Text style={styles.title}>{chapter.title}</Text>
           <Text style={styles.book}>{book.title} · {book.author}</Text>
-          <View style={styles.processing}><View style={styles.readyDot} /><Text style={styles.processingText}>Mô phỏng · Đoạn {chunkNumber}/{chunks.length} · Chưa có âm thanh</Text></View>
+          <View style={styles.processing}><View style={styles.readyDot} /><Text style={styles.processingText}>{error || (generationStatus === 'ready' ? 'Đã tạo xong âm thanh' : `Đang tạo âm thanh: ${readyCount}/${segments.length || '?'} đoạn`)}</Text></View>
+          {segments.length > 1 ? <View style={styles.generationTrack}><View style={[styles.generationFill, { width: `${Math.round(readyCount / segments.length * 100)}%` }]} /></View> : null}
+          {error ? <Pressable onPress={() => setRetry((value) => value + 1)}><Text style={styles.processingText}>Thử lại</Text></Pressable> : null}
+          {currentSegment ? <View style={styles.transcript}>
+            <Text style={styles.transcriptLabel}>ĐOẠN {segmentIndex + 1}/{segments.length} · {hasWordTimings && currentSegment.timing_quality === 'phoneme' ? 'THEO GIỌNG ĐỌC' : 'TÔ SÁNG ƯỚC LƯỢNG'}</Text>
+            <Text style={styles.transcriptText}>{wordWindowStart > 0 ? '… ' : ''}{words.slice(wordWindowStart, wordWindowEnd).map((word, offset) => <Text key={`${segmentIndex}-${wordWindowStart + offset}`} style={wordWindowStart + offset === activeWord && audioUrl ? styles.spokenWord : undefined}>{word}{wordWindowStart + offset < words.length - 1 ? ' ' : ''}</Text>)}{wordWindowEnd < words.length ? '…' : ''}</Text>
+          </View> : null}
+          {waitingForNext && generationStatus !== 'ready' ? <Text style={styles.waiting}>Đang chờ đoạn tiếp theo...</Text> : null}
 
           <View style={styles.timeline}>
             <View style={styles.track}><View style={[styles.fill, { width: progress }]} /><View style={[styles.knob, { left: progress }]} /></View>
             <View style={styles.times}><Text style={styles.time}>{formatTime(position)}</Text><Text style={styles.time}>{formatTime(duration)}</Text></View>
           </View>
           <View style={styles.controls}>
-            <Pressable accessibilityLabel="Tua lùi 10 giây" onPress={() => seek(-10)} style={styles.control}><AppIcon name="previous" size={30} /><Text style={styles.seekLabel}>10</Text></Pressable>
-            <Pressable accessibilityLabel={playing ? 'Tạm dừng' : 'Phát'} onPress={togglePlaying} style={styles.play}><AppIcon name={playing ? 'pause' : 'play'} size={28} color={colors.white} /></Pressable>
-            <Pressable accessibilityLabel="Tua tới 10 giây" onPress={() => seek(10)} style={styles.control}><AppIcon name="next" size={30} /><Text style={styles.seekLabel}>10</Text></Pressable>
+            <Pressable accessibilityLabel="Tua lùi 10 giây" disabled={!audioUrl} onPress={() => seek(-10)} style={[styles.control, !audioUrl && styles.disabled]}><AppIcon name="previous" size={30} /><Text style={styles.seekLabel}>10</Text></Pressable>
+            <Pressable accessibilityLabel={playing ? 'Tạm dừng' : 'Phát'} disabled={!audioUrl} onPress={togglePlaying} style={[styles.play, !audioUrl && styles.disabled]}><AppIcon name={playing ? 'pause' : 'play'} size={28} color={colors.white} /></Pressable>
+            <Pressable accessibilityLabel="Tua tới 10 giây" disabled={!audioUrl} onPress={() => seek(10)} style={[styles.control, !audioUrl && styles.disabled]}><AppIcon name="next" size={30} /><Text style={styles.seekLabel}>10</Text></Pressable>
           </View>
 
           <Text style={styles.sectionLabel}>TỐC ĐỘ ĐỌC</Text>
@@ -105,7 +225,7 @@ export function AudioPlayer({ visible, onClose, book, chapter: initialChapter, s
           <View style={styles.sectionHeading}><Text style={styles.sectionLabel}>HẸN GIỜ DỪNG</Text>{timerSeconds > 0 ? <Text style={styles.timerRemaining}>Còn {formatTime(timerSeconds)}</Text> : null}</View>
           <View style={styles.timerRow}>
             {timerOptions.map((minutes) => <Pressable key={minutes} onPress={() => selectTimer(minutes)} style={[styles.timerChip, timerMinutes === minutes && !stopAtChapterEnd && styles.timerChipActive]}><Text style={[styles.timerText, timerMinutes === minutes && !stopAtChapterEnd && styles.timerTextActive]}>{minutes === 0 ? 'Tắt' : `${minutes} phút`}</Text></Pressable>)}
-            <Pressable onPress={() => setPlayback((current) => ({ ...current, stopAtChapterEnd: true, timerMinutes: 0, timerSeconds: 0 }))} style={[styles.timerChip, stopAtChapterEnd && styles.timerChipActive]}><Text style={[styles.timerText, stopAtChapterEnd && styles.timerTextActive]}>Hết chương</Text></Pressable>
+            <Pressable onPress={() => { setStopAtChapterEnd(true); setTimerMinutes(0); setTimerSeconds(0); }} style={[styles.timerChip, stopAtChapterEnd && styles.timerChipActive]}><Text style={[styles.timerText, stopAtChapterEnd && styles.timerTextActive]}>Hết chương</Text></Pressable>
           </View>
 
           <Pressable disabled={!hasNextChapter} onPress={onNextChapter} style={[styles.nextChapter, !hasNextChapter && styles.disabled]}>
@@ -113,8 +233,8 @@ export function AudioPlayer({ visible, onClose, book, chapter: initialChapter, s
             <View style={styles.nextBody}><Text style={styles.nextLabel}>PHÁT TIẾP</Text><Text style={styles.nextTitle}>{hasNextChapter ? 'Chuyển sang chương kế tiếp' : 'Đây là chương cuối'}</Text></View>
             <AppIcon name="chevron" color={colors.inkSoft} />
           </Pressable>
-          <View style={styles.autoNextRow}><View><Text style={styles.autoNextTitle}>Tự động phát chương sau</Text><Text style={styles.autoNextText}>Tiếp tục nghe mà không đóng AI Voice</Text></View><Switch accessibilityLabel="Tự động phát chương sau" value={autoNext} onValueChange={(value) => setPlayback((current) => ({ ...current, autoNext: value }))} trackColor={{ false: colors.border, true: colors.sage }} thumbColor={autoNext ? colors.moss : colors.white} /></View>
-          <View style={styles.voice}><View style={styles.voiceAvatar}><Text style={styles.voiceAvatarText}>AN</Text></View><View style={styles.voiceBody}><Text style={styles.voiceLabel}>Giọng đọc</Text><Text style={styles.voiceName}>An · Tự nhiên, ấm áp</Text></View><View style={styles.liveBadge}><Text style={styles.liveBadgeText}>ĐANG CHỌN</Text></View></View>
+          <View style={styles.autoNextRow}><View><Text style={styles.autoNextTitle}>Tự động phát chương sau</Text><Text style={styles.autoNextText}>Tiếp tục nghe mà không đóng AI Voice</Text></View><Switch accessibilityLabel="Tự động phát chương sau" value={autoNext} onValueChange={setAutoNext} trackColor={{ false: colors.border, true: colors.sage }} thumbColor={autoNext ? colors.moss : colors.white} /></View>
+          <View style={styles.voice}><View style={styles.voiceAvatar}><Text style={styles.voiceAvatarText}>EN</Text></View><View style={styles.voiceBody}><Text style={styles.voiceLabel}>Giọng đọc</Text><Text style={styles.voiceName}>Kokoro · af_heart</Text></View><View style={styles.liveBadge}><Text style={styles.liveBadgeText}>ĐANG CHỌN</Text></View></View>
         </ScrollView>
       </View>
     </Modal>
@@ -135,6 +255,13 @@ const styles = StyleSheet.create({
   processing: { marginTop: 12, flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#E4ECE5', borderRadius: radii.pill, paddingHorizontal: 10, paddingVertical: 6 },
   readyDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.moss },
   processingText: { flexShrink: 1, color: colors.moss, fontSize: 9, fontWeight: '700' },
+  generationTrack: { width: '100%', height: 4, borderRadius: 2, backgroundColor: '#D9E3D9', marginTop: 8 },
+  generationFill: { height: 4, borderRadius: 2, backgroundColor: colors.moss },
+  transcript: { width: '100%', marginTop: 16, borderRadius: radii.md, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, padding: 16 },
+  transcriptLabel: { color: colors.inkSoft, fontSize: 9, fontWeight: '800', marginBottom: 8 },
+  transcriptText: { color: colors.ink, fontFamily: 'serif', fontSize: 17, lineHeight: 27 },
+  spokenWord: { color: colors.coral, backgroundColor: '#F7DEC8', fontWeight: '700' },
+  waiting: { color: colors.inkSoft, fontSize: 11, marginTop: 8 },
   timeline: { width: '100%', marginTop: 23 },
   track: { height: 4, backgroundColor: '#D9D4C8', borderRadius: 2 },
   fill: { height: 4, backgroundColor: colors.coral, borderRadius: 2 },
