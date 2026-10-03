@@ -277,9 +277,9 @@ export function AudioPlayer({ visible, onClose, book, chapter: initialChapter, s
             <View style={styles.times}><Text style={styles.time}>{formatTime(playbackPosition)}</Text><Text style={styles.time}>~{formatTime(chapterDuration)}</Text></View>
           </View>
           <View style={styles.controls}>
-            <Pressable accessibilityLabel="Tua lùi 10 giây" disabled={!audioUrl} onPress={() => seek(-10)} style={[styles.control, !audioUrl && styles.disabled]}><AppIcon name="previous" size={30} /><Text style={styles.seekLabel}>10</Text></Pressable>
+            <Pressable accessibilityLabel="Tua lùi 10 giây" disabled={!audioUrl} onPress={() => seek(-10)} style={[styles.control, !audioUrl && styles.disabled]}><AppIcon name="previous" size={50} /><Text style={styles.seekLabel}>-10</Text></Pressable>
             <Pressable accessibilityLabel={playing ? 'Tạm dừng' : 'Phát'} disabled={!audioUrl} onPress={togglePlaying} style={[styles.play, !audioUrl && styles.disabled]}><AppIcon name={playing ? 'pause' : 'play'} size={28} color={colors.white} /></Pressable>
-            <Pressable accessibilityLabel="Tua tới 10 giây" disabled={!audioUrl} onPress={() => seek(10)} style={[styles.control, !audioUrl && styles.disabled]}><AppIcon name="next" size={30} /><Text style={styles.seekLabel}>10</Text></Pressable>
+            <Pressable accessibilityLabel="Tua tới 10 giây" disabled={!audioUrl} onPress={() => seek(10)} style={[styles.control, !audioUrl && styles.disabled]}><AppIcon name="next" size={50} /><Text style={styles.seekLabel}>10</Text></Pressable>
           </View>
 
           <Text style={styles.sectionLabel}>TỐC ĐỘ ĐỌC</Text>
@@ -337,7 +337,7 @@ const styles = StyleSheet.create({
   controls: { flexDirection: 'row', alignItems: 'center', gap: 32, marginTop: 10 },
   play: { width: 68, height: 68, borderRadius: 34, backgroundColor: colors.moss, alignItems: 'center', justifyContent: 'center', paddingLeft: 3 },
   control: { width: 50, height: 50, alignItems: 'center', justifyContent: 'center' },
-  seekLabel: { position: 'absolute', color: colors.ink, fontSize: 8, fontWeight: '800', top: 20 },
+  seekLabel: { position: 'absolute', color: colors.ink, fontSize: 8, fontWeight: '800', top: 35 },
   sectionLabel: { alignSelf: 'flex-start', color: colors.inkSoft, fontSize: 9, fontWeight: '800', letterSpacing: 1.2, marginTop: 23 },
   speeds: { width: '100%', flexDirection: 'row', justifyContent: 'space-between', marginTop: 10 },
   speed: { minWidth: 48, height: 34, borderRadius: radii.pill, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' },
