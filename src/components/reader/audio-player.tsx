@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { setAudioModeAsync, useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
-import { Modal, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { GestureResponderEvent, Modal, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BookCover } from '@/components/book/book-cover';
+import { chapterPosition, seekTarget, segmentDuration, timelineFraction } from '@/components/reader/audio-timeline';
 import { AppIcon } from '@/components/ui/app-icon';
 import { colors, radii } from '@/constants/theme';
 import { AudioSegment, ttsApi } from '@/services/tts-api';
@@ -12,7 +13,7 @@ import { Book, Chapter } from '@/types/book';
 const speeds = [0.75, 1, 1.25, 1.5, 2];
 const timerOptions = [0, 15, 30];
 function formatTime(seconds: number) {
-  const safe = Math.max(0, Math.round(seconds));
+  const safe = Number.isFinite(seconds) ? Math.max(0, Math.round(seconds)) : 0;
   return `${String(Math.floor(safe / 60)).padStart(2, '0')}:${String(safe % 60).padStart(2, '0')}`;
 }
 
@@ -44,6 +45,9 @@ export function AudioPlayer({ visible, onClose, book, chapter: initialChapter, s
   const waitingRef = useRef(false);
   const segmentsRef = useRef<AudioSegment[]>([]);
   const generationRef = useRef('queued');
+  const pendingPosition = useRef<number | null>(null);
+  const timelineWidth = useRef(1);
+  const timelineRef = useRef<View>(null);
   const playbackOptionsRef = useRef({ autoNext, stopAtChapterEnd, timerExpired, chapterIndex, hasNextChapter: false });
   const chapter = book.chapters[chapterIndex];
   const hasNextChapter = chapterIndex < book.chapters.length - 1;
@@ -53,8 +57,13 @@ export function AudioPlayer({ visible, onClose, book, chapter: initialChapter, s
   const currentSegment = segments[segmentIndex];
   const audioUrl = currentSegment?.audio_url ?? null;
   const readyCount = segments.filter((segment) => segment.audio_url).length;
-  const position = audioUrl ? status.currentTime : 0;
-  const duration = audioUrl ? (status.duration || currentSegment.duration || 0) : 0;
+  const position = audioUrl && Number.isFinite(status.currentTime) ? Math.max(0, status.currentTime) : 0;
+  const duration = audioUrl
+    ? (Number.isFinite(status.duration) && status.duration > 0 ? status.duration : segmentDuration(currentSegment))
+    : 0;
+  const durations = segments.map(segmentDuration);
+  const chapterDuration = durations.reduce((sum, item) => sum + item, 0);
+  const playbackPosition = chapterPosition(durations, segmentIndex, position);
   const playing = Boolean(audioUrl && status.playing);
   const words = useMemo(() => currentSegment?.text.trim().split(/\s+/).filter(Boolean) ?? [], [currentSegment?.text]);
   const totalWeight = words.reduce((sum, word) => sum + Math.max(1, word.replace(/[^a-z0-9]/gi, '').length), 0);
@@ -97,6 +106,7 @@ export function AudioPlayer({ visible, onClose, book, chapter: initialChapter, s
     segmentsRef.current = [];
     generationRef.current = 'queued';
     finishedSegment.current = null;
+    pendingPosition.current = null;
     setChapterIndex(index);
   }, [player]);
 
@@ -113,7 +123,7 @@ export function AudioPlayer({ visible, onClose, book, chapter: initialChapter, s
     let poll: ReturnType<typeof setTimeout>;
     const check = async (start: boolean) => {
       try {
-        const result = start ? await ttsApi.createAudio(chapter.id) : await ttsApi.status(chapter.id);
+        const result = start ? await ttsApi.createAudio(chapter.id, currentIndexRef.current) : await ttsApi.status(chapter.id);
         if (!active) return;
         segmentsRef.current = result.data.segments;
         generationRef.current = result.data.status;
@@ -139,10 +149,29 @@ export function AudioPlayer({ visible, onClose, book, chapter: initialChapter, s
   }, [chapter.id, finishChapter, retry, selectSegment, visible]);
 
   useEffect(() => {
+    if (!visible || segmentIndex === 0) return;
+    ttsApi.createAudio(chapter.id, segmentIndex).catch((cause) => {
+      setError(cause instanceof Error ? cause.message : 'Không thể yêu cầu đoạn đọc.');
+    });
+  }, [chapter.id, segmentIndex, visible]);
+
+  useEffect(() => {
     if (!audioUrl || !visible) return;
     finishedSegment.current = null;
-    player.replace(audioUrl);
-    player.play();
+    const offset = pendingPosition.current;
+    pendingPosition.current = null;
+    if (offset !== null) {
+      const listener = player.addListener('playbackStatusUpdate', (update) => {
+        if (!update.isLoaded) return;
+        listener.remove();
+        player.seekTo(offset).then(() => player.play()).catch(() => setError('Không thể tua tới vị trí đã chọn.'));
+      });
+      player.replace(audioUrl);
+      return () => listener.remove();
+    } else {
+      player.replace(audioUrl);
+      player.play();
+    }
   }, [audioUrl, player, visible]);
 
   useEffect(() => { if (audioUrl) player.setPlaybackRate(speed); }, [audioUrl, player, speed]);
@@ -169,7 +198,7 @@ export function AudioPlayer({ visible, onClose, book, chapter: initialChapter, s
       if (!update.didJustFinish || finishedSegment.current === marker) return;
       finishedSegment.current = marker;
       if (segmentsRef.current[index + 1]?.audio_url) selectSegment(index + 1);
-      else if (generationRef.current === 'ready' && index === segmentsRef.current.length - 1) finishChapter();
+      else if (index === segmentsRef.current.length - 1) finishChapter();
       else { waitingRef.current = true; setWaitingForNext(true); }
     });
     return () => listener.remove();
@@ -179,14 +208,38 @@ export function AudioPlayer({ visible, onClose, book, chapter: initialChapter, s
     player.pause();
     onClose(chapter.id);
   };
-  const seek = (seconds: number) => player.seekTo(Math.min(duration, Math.max(0, position + seconds)));
+  const seekToChapterPosition = (seconds: number) => {
+    const target = seekTarget(durations, seconds);
+    if (!target) return;
+    const { index, offset } = target;
+    if (index === segmentIndex && audioUrl) {
+      player.seekTo(offset).catch(() => setError('Không thể tua tới vị trí đã chọn.'));
+    } else {
+      player.pause();
+      pendingPosition.current = offset;
+      selectSegment(index);
+    }
+  };
+  const seek = (seconds: number) => seekToChapterPosition(playbackPosition + seconds);
+  const seekFromTimeline = (event: GestureResponderEvent) => {
+    const nativeEvent = event.nativeEvent as typeof event.nativeEvent & { clientX?: number };
+    const fraction = timelineFraction(nativeEvent.locationX, timelineWidth.current);
+    if (fraction !== null) {
+      seekToChapterPosition(fraction * chapterDuration);
+    } else if (Number.isFinite(nativeEvent.clientX)) {
+      timelineRef.current?.measureInWindow((x, _y, width) => {
+        const measuredFraction = timelineFraction(nativeEvent.clientX! - x, width);
+        if (measuredFraction !== null) seekToChapterPosition(measuredFraction * chapterDuration);
+      });
+    }
+  };
   const togglePlaying = () => {
     if (playing) player.pause();
-    else { if (duration > 0 && position >= duration) player.seekTo(0); player.play(); }
+    else { if (duration > 0 && position >= duration) player.seekTo(0).catch(() => {}); player.play(); }
   };
   const onNextChapter = () => { if (hasNextChapter) selectChapter(chapterIndex + 1); };
   const selectTimer = (minutes: number) => { setTimerMinutes(minutes); setTimerSeconds(minutes * 60); setTimerExpired(false); setStopAtChapterEnd(false); };
-  const progress = `${duration > 0 ? Math.round(position / duration * 100) : 0}%` as `${number}%`;
+  const progress = `${chapterDuration > 0 ? Math.round(playbackPosition / chapterDuration * 100) : 0}%` as `${number}%`;
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={close}>
@@ -198,18 +251,30 @@ export function AudioPlayer({ visible, onClose, book, chapter: initialChapter, s
           <Text style={styles.chapter}>CHƯƠNG {chapter.number}</Text>
           <Text style={styles.title}>{chapter.title}</Text>
           <Text style={styles.book}>{book.title} · {book.author}</Text>
-          <View style={styles.processing}><View style={styles.readyDot} /><Text style={styles.processingText}>{error || (generationStatus === 'ready' ? 'Đã tạo xong âm thanh' : `Đang tạo âm thanh: ${readyCount}/${segments.length || '?'} đoạn`)}</Text></View>
+          <View style={styles.processing}><View style={styles.readyDot} /><Text style={styles.processingText}>{error || (generationStatus === 'ready' ? 'Đã tạo xong âm thanh' : `Đã có ${readyCount}/${segments.length || '?'} đoạn · chuẩn bị 8 đoạn tiếp theo`)}</Text></View>
           {segments.length > 1 ? <View style={styles.generationTrack}><View style={[styles.generationFill, { width: `${Math.round(readyCount / segments.length * 100)}%` }]} /></View> : null}
           {error ? <Pressable onPress={() => setRetry((value) => value + 1)}><Text style={styles.processingText}>Thử lại</Text></Pressable> : null}
           {currentSegment ? <View style={styles.transcript}>
             <Text style={styles.transcriptLabel}>ĐOẠN {segmentIndex + 1}/{segments.length} · {hasWordTimings && currentSegment.timing_quality === 'phoneme' ? 'THEO GIỌNG ĐỌC' : 'TÔ SÁNG ƯỚC LƯỢNG'}</Text>
             <Text style={styles.transcriptText}>{wordWindowStart > 0 ? '… ' : ''}{words.slice(wordWindowStart, wordWindowEnd).map((word, offset) => <Text key={`${segmentIndex}-${wordWindowStart + offset}`} style={wordWindowStart + offset === activeWord && audioUrl ? styles.spokenWord : undefined}>{word}{wordWindowStart + offset < words.length - 1 ? ' ' : ''}</Text>)}{wordWindowEnd < words.length ? '…' : ''}</Text>
           </View> : null}
-          {waitingForNext && generationStatus !== 'ready' ? <Text style={styles.waiting}>Đang chờ đoạn tiếp theo...</Text> : null}
+          {!audioUrl && segments.length > 0 ? <Text style={styles.waiting}>Đang tạo đoạn {segmentIndex + 1}...</Text> : waitingForNext ? <Text style={styles.waiting}>Đang chờ đoạn tiếp theo...</Text> : null}
 
           <View style={styles.timeline}>
-            <View style={styles.track}><View style={[styles.fill, { width: progress }]} /><View style={[styles.knob, { left: progress }]} /></View>
-            <View style={styles.times}><Text style={styles.time}>{formatTime(position)}</Text><Text style={styles.time}>{formatTime(duration)}</Text></View>
+            <Pressable
+              accessibilityRole="adjustable"
+              accessibilityLabel="Vị trí trong chương"
+              accessibilityValue={{ min: 0, max: 100, now: Math.round(chapterDuration ? playbackPosition / chapterDuration * 100 : 0) }}
+              accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]}
+              onAccessibilityAction={(event) => seek(event.nativeEvent.actionName === 'increment' ? 30 : -30)}
+              onLayout={(event) => { timelineWidth.current = event.nativeEvent.layout.width; }}
+              onPress={seekFromTimeline}
+              ref={timelineRef}
+              style={styles.seekTrack}
+            >
+              <View style={styles.track}><View style={[styles.fill, { width: progress }]} /><View style={[styles.knob, { left: progress }]} /></View>
+            </Pressable>
+            <View style={styles.times}><Text style={styles.time}>{formatTime(playbackPosition)}</Text><Text style={styles.time}>~{formatTime(chapterDuration)}</Text></View>
           </View>
           <View style={styles.controls}>
             <Pressable accessibilityLabel="Tua lùi 10 giây" disabled={!audioUrl} onPress={() => seek(-10)} style={[styles.control, !audioUrl && styles.disabled]}><AppIcon name="previous" size={30} /><Text style={styles.seekLabel}>10</Text></Pressable>
@@ -263,6 +328,7 @@ const styles = StyleSheet.create({
   spokenWord: { color: colors.coral, backgroundColor: '#F7DEC8', fontWeight: '700' },
   waiting: { color: colors.inkSoft, fontSize: 11, marginTop: 8 },
   timeline: { width: '100%', marginTop: 23 },
+  seekTrack: { width: '100%', height: 28, justifyContent: 'center' },
   track: { height: 4, backgroundColor: '#D9D4C8', borderRadius: 2 },
   fill: { height: 4, backgroundColor: colors.coral, borderRadius: 2 },
   knob: { position: 'absolute', marginLeft: -7, top: -5, width: 14, height: 14, borderRadius: 7, backgroundColor: colors.coral },
