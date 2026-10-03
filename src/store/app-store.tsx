@@ -34,21 +34,9 @@ const AppStore = createContext<AppState | null>(null);
 
 export function AppStoreProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
-  const [favorites, setFavorites] = useState(['khu-vuon-ben-o-cua', 'nghe-thuat-tap-trung']);
-  const [bookmarks, setBookmarks] = useState<SavedBookmark[]>([
-    {
-      id: 'slow-2-64',
-      bookId: 'nhung-ngay-rat-cham',
-      chapterId: 'slow-2',
-      percent: 64,
-      quote: 'Ta đang tìm điều gì? Có lẽ không phải một nơi chốn, mà là cảm giác được sống trọn vẹn trong từng khoảnh khắc.',
-      note: 'Đọc lại khi cần chậm lại.',
-      createdAt: 'Hôm nay, 08:42',
-    },
-  ]);
-  const [progress, setProgress] = useState<Record<string, ReadingProgress>>({
-    'nhung-ngay-rat-cham': { chapterId: 'slow-2', percent: 64, updatedAt: 0 },
-  });
+  const [favorites, setFavorites] = useState<string[]>([]);
+  const [bookmarks, setBookmarks] = useState<SavedBookmark[]>([]);
+  const [progress, setProgress] = useState<Record<string, ReadingProgress>>({});
   const [readerPreferences, setReaderPreferences] = useState<ReaderPreferences>({ fontSize: 18, lineHeight: 1.72, theme: 'light', speed: 1 });
 
   const saveProgress = useCallback((bookId: string, chapterId: string, percent: number) => {

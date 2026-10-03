@@ -10,7 +10,7 @@ import { Book, Chapter } from '@/types/book';
 const speeds = [0.75, 1, 1.25, 1.5, 2];
 const timerOptions = [0, 15, 30];
 function chapterDuration(chapter: Chapter) {
-  return Math.max(1, Number.parseInt(chapter.duration, 10) || 1) * 60;
+  return Math.max(60, Math.ceil(chapter.content.join(' ').split(/\s+/).length / 180) * 60);
 }
 
 function formatTime(seconds: number) {

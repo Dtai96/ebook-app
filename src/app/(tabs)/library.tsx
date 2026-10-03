@@ -1,29 +1,50 @@
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams, useFocusEffect } from 'expo-router';
+import { useCallback, useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { BookCover } from '@/components/book/book-cover';
 import { Screen } from '@/components/screen';
 import { AppIcon } from '@/components/ui/app-icon';
 import { colors, radii } from '@/constants/theme';
-import { books, getChapter } from '@/data/books';
+import { bookApi } from '@/services/book-api';
 import { useAppStore } from '@/store/app-store';
+import type { Book } from '@/types/book';
 
 type LibraryTab = 'favorites' | 'bookmarks';
 
 export default function LibraryScreen() {
   const params = useLocalSearchParams<{ view?: LibraryTab }>();
   const { favorites, bookmarks, progress, removeBookmark } = useAppStore();
+  const [bookMap, setBookMap] = useState<Record<string, Book>>({});
+  const [error, setError] = useState('');
+  const [reload, setReload] = useState(-1);
+  const bookIds = [...new Set([...favorites, ...Object.keys(progress), ...bookmarks.map((item) => item.bookId)])].join(',');
+  useFocusEffect(useCallback(() => { setReload((value) => value + 1); }, []));
+  useEffect(() => {
+    if (reload < 0) return;
+    let active = true;
+    const ids = bookIds ? bookIds.split(',') : [];
+    Promise.all(ids.map((id) => bookApi.detail(id)))
+      .then((items) => {
+        if (!active) return;
+        setBookMap(Object.fromEntries(items.map((item) => [item.id, item])));
+        setError('');
+      })
+      .catch((cause) => { if (active) setError(cause instanceof Error ? cause.message : 'Không tải được thư viện.'); });
+    return () => { active = false; };
+  }, [bookIds, reload]);
   const activeTab = params.view === 'bookmarks' ? 'bookmarks' : 'favorites';
   const setActiveTab = (view: LibraryTab) => router.setParams({ view });
-  const savedBooks = books.filter((book) => favorites.includes(book.id));
+  const savedBooks = favorites.map((id) => bookMap[id]).filter((book): book is Book => Boolean(book));
   const recentBookId = Object.entries(progress).sort((a, b) => b[1].updatedAt - a[1].updatedAt)[0]?.[0];
-  const current = books.find((book) => book.id === recentBookId);
-  const currentChapter = current ? getChapter(progress[current.id].chapterId).chapter : null;
+  const current = recentBookId ? bookMap[recentBookId] : null;
+  const currentChapter = current?.chapters.find((chapter) => chapter.id === progress[current.id].chapterId);
 
   return (
     <Screen>
       <Text style={styles.kicker}>KHÔNG GIAN CỦA BẠN</Text>
       <Text style={styles.title}>Thư viện</Text>
+      {error ? <Pressable onPress={() => setReload((value) => value + 1)}><Text style={styles.emptyText}>{error} · Chạm để thử lại</Text></Pressable> : null}
       <View style={styles.statsRow}>
         <View style={styles.stat}><Text style={styles.statNumber}>{savedBooks.length}</Text><Text style={styles.statLabel}>Sách đã lưu</Text></View>
         <View style={styles.statDivider} />
@@ -67,12 +88,13 @@ export default function LibraryScreen() {
       ) : (
         <View style={styles.bookmarkList}>
           {bookmarks.map((bookmark) => {
-            const { book, chapter } = getChapter(bookmark.chapterId);
+            const book = bookMap[bookmark.bookId];
+            const chapter = book?.chapters.find((item) => item.id === bookmark.chapterId);
             return (
               <Pressable key={bookmark.id} onPress={() => router.push({ pathname: '/reader/[id]', params: { id: bookmark.chapterId, percent: String(bookmark.percent), ...(bookmark.paragraphIndex !== undefined ? { paragraph: String(bookmark.paragraphIndex) } : {}) } })} style={({ pressed }) => [styles.bookmarkCard, pressed && styles.pressed]}>
                 <View style={styles.bookmarkTop}>
                   <View style={styles.bookmarkIcon}><AppIcon name="bookmarkFill" size={18} color={colors.coral} /></View>
-                  <View style={styles.bookmarkHeading}><Text numberOfLines={1} style={styles.bookmarkBook}>{book.title}</Text><Text style={styles.bookmarkMeta}>Chương {chapter.number} · Vị trí {bookmark.percent}% · {bookmark.createdAt}</Text></View>
+                  <View style={styles.bookmarkHeading}><Text numberOfLines={1} style={styles.bookmarkBook}>{book?.title ?? 'Sách đã xóa'}</Text><Text style={styles.bookmarkMeta}>Chương {chapter?.number ?? '?'} · Vị trí {bookmark.percent}% · {bookmark.createdAt}</Text></View>
                   <Pressable accessibilityLabel="Xóa bookmark" onPress={(event) => { event.stopPropagation(); removeBookmark(bookmark.id); }} style={styles.remove}><AppIcon name="trash" size={20} color={colors.danger} /></Pressable>
                 </View>
                 <Text numberOfLines={3} style={styles.quote}>“{bookmark.quote}”</Text>

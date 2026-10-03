@@ -1,19 +1,35 @@
 import { router, useLocalSearchParams } from 'expo-router';
+import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BookCover } from '@/components/book/book-cover';
 import { AppIcon } from '@/components/ui/app-icon';
 import { colors, radii } from '@/constants/theme';
-import { getBook } from '@/data/books';
+import { bookApi } from '@/services/book-api';
 import { useAppStore } from '@/store/app-store';
+import type { Book } from '@/types/book';
 
 export default function BookDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const book = getBook(id);
+  const [book, setBook] = useState<Book | null>(null);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [reload, setReload] = useState(0);
+  useEffect(() => {
+    if (!id) return;
+    let active = true;
+    bookApi.detail(id).then((result) => { if (active) { setBook(result); setError(''); } })
+      .catch((cause) => { if (active) setError(cause instanceof Error ? cause.message : 'Không tải được sách.'); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [id, reload]);
   const { favorites, toggleFavorite, progress } = useAppStore();
-  const favorite = favorites.includes(book.id);
-  const currentChapter = progress[book.id]?.chapterId ?? book.chapters[0].id;
+  const favorite = book ? favorites.includes(book.id) : false;
+  const currentChapter = book ? progress[book.id]?.chapterId ?? book.chapters[0]?.id : undefined;
+
+  if (loading && (!book || book.id !== id)) return <SafeAreaView style={styles.safe}><Text style={styles.description}>Đang tải sách...</Text></SafeAreaView>;
+  if (error || !book || book.id !== id) return <SafeAreaView style={styles.safe}><Pressable onPress={() => { setLoading(true); setError(''); setReload((value) => value + 1); }}><Text style={styles.description}>{error || 'Không tìm thấy sách.'} · Chạm để thử lại</Text></Pressable></SafeAreaView>;
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -24,22 +40,20 @@ export default function BookDetailScreen() {
       </View>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
         <View style={styles.hero}>
-          <View style={[styles.glow, { backgroundColor: book.accentColor }]} />
+          <View style={styles.glow} />
           <BookCover book={book} width={146} />
           <Text style={styles.category}>{book.category.toUpperCase()}</Text>
           <Text style={styles.title}>{book.title}</Text>
           <Text style={styles.author}>bởi {book.author}</Text>
           <View style={styles.metrics}>
-            <View style={styles.metric}><Text style={styles.metricValue}>★ {book.rating}</Text><Text style={styles.metricLabel}>Đánh giá</Text></View>
+            <View style={styles.metric}><Text style={styles.metricValue}>{book.viewCount}</Text><Text style={styles.metricLabel}>Lượt xem</Text></View>
             <View style={styles.divider} />
-            <View style={styles.metric}><Text style={styles.metricValue}>{book.readers}</Text><Text style={styles.metricLabel}>Lượt đọc</Text></View>
-            <View style={styles.divider} />
-            <View style={styles.metric}><Text style={styles.metricValue}>{book.chapters.length}</Text><Text style={styles.metricLabel}>Chương</Text></View>
+            <View style={styles.metric}><Text style={styles.metricValue}>{book.chaptersCount}</Text><Text style={styles.metricLabel}>Chương</Text></View>
           </View>
         </View>
 
         <View style={styles.actions}>
-          <Pressable onPress={() => router.push(`/reader/${currentChapter}`)} style={({ pressed }) => [styles.primary, pressed && styles.pressed]}><AppIcon name="play" size={15} color={colors.white} /><Text style={styles.primaryText}>{progress[book.id] ? 'Đọc tiếp' : 'Đọc ngay'}</Text></Pressable>
+          <Pressable disabled={!currentChapter} onPress={() => { if (currentChapter) router.push(`/reader/${currentChapter}`); }} style={({ pressed }) => [styles.primary, pressed && styles.pressed, !currentChapter && { opacity: 0.5 }]}><AppIcon name="play" size={15} color={colors.white} /><Text style={styles.primaryText}>{progress[book.id] ? 'Đọc tiếp' : 'Đọc ngay'}</Text></Pressable>
           <Pressable onPress={() => toggleFavorite(book.id)} style={styles.secondary}><AppIcon name={favorite ? 'heartFill' : 'heart'} size={20} color={favorite ? colors.coral : colors.moss} /><Text style={styles.secondaryText}>{favorite ? 'Đã lưu' : 'Yêu thích'}</Text></Pressable>
         </View>
 
@@ -48,12 +62,12 @@ export default function BookDetailScreen() {
           <Text style={styles.description}>{book.description}</Text>
         </View>
         <View style={styles.section}>
-          <View style={styles.sectionHeader}><Text style={styles.sectionTitle}>Mục lục</Text><Text style={styles.duration}>{book.readTime}</Text></View>
+          <View style={styles.sectionHeader}><Text style={styles.sectionTitle}>Mục lục</Text><Text style={styles.duration}>{book.chaptersCount} chương</Text></View>
           <View style={styles.chapterList}>
             {book.chapters.map((chapter, index) => (
               <Pressable key={chapter.id} onPress={() => router.push(`/reader/${chapter.id}`)} style={[styles.chapterRow, index < book.chapters.length - 1 && styles.chapterBorder]}>
                 <View style={styles.chapterNumber}><Text style={styles.chapterNumberText}>{String(chapter.number).padStart(2, '0')}</Text></View>
-                <View style={styles.chapterBody}><Text style={styles.chapterTitle}>{chapter.title}</Text><Text style={styles.chapterMeta}>{chapter.duration} đọc</Text></View>
+                <View style={styles.chapterBody}><Text style={styles.chapterTitle}>{chapter.title}</Text></View>
                 {progress[book.id]?.chapterId === chapter.id ? <View style={styles.now}><Text style={styles.nowText}>ĐANG ĐỌC</Text></View> : <AppIcon name="chevron" color={colors.inkSoft} />}
               </Pressable>
             ))}
@@ -71,7 +85,7 @@ const styles = StyleSheet.create({
   iconButton: { width: 42, height: 42, alignItems: 'center', justifyContent: 'center' },
   content: { paddingBottom: 60 },
   hero: { alignItems: 'center', overflow: 'hidden', paddingTop: 14, paddingHorizontal: 20 },
-  glow: { position: 'absolute', top: 50, width: 250, height: 250, borderRadius: 125, opacity: 0.16 },
+  glow: { position: 'absolute', top: 50, width: 250, height: 250, borderRadius: 125, opacity: 0.16, backgroundColor: colors.gold },
   category: { color: colors.coral, fontSize: 10, letterSpacing: 1.5, fontWeight: '800', marginTop: 22 },
   title: { color: colors.ink, fontFamily: 'serif', textAlign: 'center', fontSize: 29, lineHeight: 34, fontWeight: '700', marginTop: 8 },
   author: { color: colors.inkSoft, fontSize: 13, marginTop: 7 },

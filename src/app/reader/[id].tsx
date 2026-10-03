@@ -8,8 +8,9 @@ import { AudioPlayer } from '@/components/reader/audio-player';
 import { ReaderSettings } from '@/components/reader/reader-settings';
 import { AppIcon } from '@/components/ui/app-icon';
 import { colors, radii, shadows } from '@/constants/theme';
-import { getChapter } from '@/data/books';
+import { bookApi } from '@/services/book-api';
 import { useAppStore } from '@/store/app-store';
+import type { Book, Chapter } from '@/types/book';
 
 const palettes = {
   light: { background: '#FFFDF8', text: '#252B27', muted: '#727971', surface: '#F5F1E8', border: '#E5E0D5' },
@@ -19,11 +20,28 @@ const palettes = {
 
 export default function ReaderScreen() {
   const { id, percent, paragraph } = useLocalSearchParams<{ id: string; percent?: string; paragraph?: string }>();
-  return <ReaderChapter key={[id, percent, paragraph].join(':')} id={id} percent={percent} paragraph={paragraph} />;
+  const [chapter, setChapter] = useState<Chapter | null>(null);
+  const [book, setBook] = useState<Book | null>(null);
+  const [error, setError] = useState('');
+  const [reload, setReload] = useState(0);
+  useEffect(() => {
+    if (!id) return;
+    let active = true;
+    bookApi.chapter(id).then(async (loadedChapter) => {
+      const loadedBook = await bookApi.detail(loadedChapter.bookId);
+      if (!active) return;
+      setChapter(loadedChapter);
+      setBook({ ...loadedBook, chapters: loadedBook.chapters.map((item) => item.id === loadedChapter.id ? loadedChapter : item) });
+      setError('');
+    }).catch((cause) => { if (active) setError(cause instanceof Error ? cause.message : 'Không tải được chương.'); });
+    return () => { active = false; };
+  }, [id, reload]);
+  if (error) return <SafeAreaView style={styles.safe}><Pressable onPress={() => setReload((value) => value + 1)}><Text>{error} · Chạm để thử lại</Text></Pressable></SafeAreaView>;
+  if (!book || !chapter || chapter.id !== id) return <SafeAreaView style={styles.safe}><Text>Đang tải chương...</Text></SafeAreaView>;
+  return <ReaderChapter key={[id, percent, paragraph].join(':')} book={book} chapter={chapter} percent={percent} paragraph={paragraph} />;
 }
 
-function ReaderChapter({ id, percent, paragraph }: { id: string; percent?: string; paragraph?: string }) {
-  const { book, chapter } = getChapter(id);
+function ReaderChapter({ book, chapter, percent, paragraph }: { book: Book; chapter: Chapter; percent?: string; paragraph?: string }) {
   const { bookmarks, progress, readerPreferences, saveBookmark, saveProgress, updateReaderPreferences } = useAppStore();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [playerOpen, setPlayerOpen] = useState(false);

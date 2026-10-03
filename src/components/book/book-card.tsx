@@ -11,7 +11,7 @@ export function BookCard({ book }: { book: Book }) {
       <BookCover book={book} width={112} />
       <Text numberOfLines={2} style={styles.title}>{book.title}</Text>
       <Text numberOfLines={1} style={styles.author}>{book.author}</Text>
-      <View style={styles.meta}><Text style={styles.star}>★</Text><Text style={styles.rating}>{book.rating}</Text></View>
+      <View style={styles.meta}><Text style={styles.chapterCount}>{book.chaptersCount} chương</Text></View>
     </Pressable>
   );
 }
@@ -22,6 +22,5 @@ const styles = StyleSheet.create({
   title: { color: colors.ink, fontSize: 15, lineHeight: 20, fontWeight: '700', marginTop: 11 },
   author: { color: colors.inkSoft, fontSize: 12, marginTop: 4 },
   meta: { flexDirection: 'row', gap: 4, alignItems: 'center', marginTop: 7 },
-  star: { color: colors.gold, fontSize: 12 },
-  rating: { color: colors.inkSoft, fontSize: 12, fontWeight: '600' },
+  chapterCount: { color: colors.inkSoft, fontSize: 12, fontWeight: '600' },
 });

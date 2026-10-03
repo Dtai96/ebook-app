@@ -1,41 +1,54 @@
-import { useLocalSearchParams, router } from 'expo-router';
-import { useState } from 'react';
+import { useLocalSearchParams, router, useFocusEffect } from 'expo-router';
+import { useCallback, useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { BookCover } from '@/components/book/book-cover';
 import { Screen } from '@/components/screen';
 import { AppIcon } from '@/components/ui/app-icon';
 import { colors, radii } from '@/constants/theme';
-import { books, categories } from '@/data/books';
-import { Book } from '@/types/book';
+import { bookApi } from '@/services/book-api';
+import type { Book, BookCategory } from '@/types/book';
 
 type SearchBy = 'title' | 'author';
 
-function normalizeText(text: string) {
-  return text
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/đ/g, 'd')
-    .replace(/Đ/g, 'D')
-    .toLowerCase()
-    .trim();
-}
-
-function matchesSearch(book: Book, query: string, searchBy: SearchBy) {
-  const field = searchBy === 'title' ? book.title : book.author;
-  return normalizeText(field).includes(normalizeText(query));
-}
-
 export default function SearchScreen() {
-  const params = useLocalSearchParams<{ category?: string }>();
+  const params = useLocalSearchParams<{ categoryId?: string; sort?: string }>();
   const [query, setQuery] = useState('');
   const [searchBy, setSearchBy] = useState<SearchBy>('title');
-  const category = params.category ?? 'Tất cả';
-  const setCategory = (value: string) => router.setParams({ category: value });
-  const filtered = books.filter((book) =>
-    matchesSearch(book, query, searchBy) &&
-    (category === 'Tất cả' || book.category === category),
-  );
+  const [categories, setCategories] = useState<BookCategory[]>([]);
+  const [books, setBooks] = useState<Book[]>([]);
+  const [page, setPage] = useState(1);
+  const [lastPage, setLastPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [reload, setReload] = useState(-1);
+  const categoryId = Number(params.categoryId) || undefined;
+  useFocusEffect(useCallback(() => { setLoading(true); setPage(1); setBooks([]); setReload((value) => value + 1); }, []));
+  useEffect(() => {
+    if (reload < 0) return;
+    let active = true;
+    bookApi.categories().then((items) => { if (active) setCategories(items.filter((item) => item.booksCount > 0)); }).catch(() => {});
+    return () => { active = false; };
+  }, [reload]);
+  useEffect(() => {
+    if (reload < 0) return;
+    let active = true;
+    const timer = setTimeout(() => {
+      bookApi.list({ page, categoryId, query, searchBy, sort: params.sort === 'popular' ? 'popular' : 'newest' })
+        .then((result) => {
+          if (!active) return;
+          setBooks((current) => page === 1 ? result.books : [...current, ...result.books]);
+          setTotal(result.total);
+          setLastPage(result.lastPage);
+          setError('');
+        })
+        .catch((cause) => { if (active) setError(cause instanceof Error ? cause.message : 'Không tải được sách.'); })
+        .finally(() => { if (active) setLoading(false); });
+    }, query.trim() ? 300 : 0);
+    return () => { active = false; clearTimeout(timer); };
+  }, [page, categoryId, query, searchBy, params.sort, reload]);
+  const setCategory = (value?: number) => { setLoading(true); setPage(1); setBooks([]); router.setParams({ categoryId: value ? String(value) : '' }); };
 
   return (
     <Screen>
@@ -46,7 +59,7 @@ export default function SearchScreen() {
         <Pressable
           accessibilityRole="button"
           accessibilityState={{ selected: searchBy === 'title' }}
-          onPress={() => setSearchBy('title')}
+          onPress={() => { setLoading(true); setPage(1); setBooks([]); setSearchBy('title'); }}
           style={[styles.searchMode, searchBy === 'title' && styles.searchModeActive]}
         >
           <Text style={[styles.searchModeText, searchBy === 'title' && styles.searchModeTextActive]}>Tên sách</Text>
@@ -54,7 +67,7 @@ export default function SearchScreen() {
         <Pressable
           accessibilityRole="button"
           accessibilityState={{ selected: searchBy === 'author' }}
-          onPress={() => setSearchBy('author')}
+          onPress={() => { setLoading(true); setPage(1); setBooks([]); setSearchBy('author'); }}
           style={[styles.searchMode, searchBy === 'author' && styles.searchModeActive]}
         >
           <Text style={[styles.searchModeText, searchBy === 'author' && styles.searchModeTextActive]}>Tác giả</Text>
@@ -65,41 +78,45 @@ export default function SearchScreen() {
         <TextInput
           accessibilityLabel={searchBy === 'title' ? 'Tìm theo tên sách' : 'Tìm theo tác giả'}
           value={query}
-          onChangeText={setQuery}
+          onChangeText={(value) => { setLoading(true); setPage(1); setBooks([]); setQuery(value); }}
           placeholder={searchBy === 'title' ? 'Nhập tên sách...' : 'Nhập tên tác giả...'}
           placeholderTextColor="#858C86"
           style={styles.input}
           autoCapitalize="none"
           returnKeyType="search"
         />
-        {query ? <Pressable accessibilityLabel="Xóa từ khóa tìm kiếm" onPress={() => setQuery('')}><AppIcon name="close" color={colors.inkSoft} /></Pressable> : null}
+        {query ? <Pressable accessibilityLabel="Xóa từ khóa tìm kiếm" onPress={() => { setLoading(true); setPage(1); setBooks([]); setQuery(''); }}><AppIcon name="close" color={colors.inkSoft} /></Pressable> : null}
       </View>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filters}>
-        {categories.map((item) => (
-          <Pressable key={item} onPress={() => setCategory(item)} style={[styles.filter, category === item && styles.filterActive]}>
-            <Text style={[styles.filterText, category === item && styles.filterTextActive]}>{item}</Text>
+        {[{ id: 0, name: 'Tất cả', booksCount: 0 }, ...categories].map((item) => (
+          <Pressable key={item.id} onPress={() => setCategory(item.id || undefined)} style={[styles.filter, (categoryId ?? 0) === item.id && styles.filterActive]}>
+            <Text style={[styles.filterText, (categoryId ?? 0) === item.id && styles.filterTextActive]}>{item.name}</Text>
           </Pressable>
         ))}
       </ScrollView>
 
       <View style={styles.resultHeader}>
-        <Text style={styles.resultTitle}>{query.trim() ? `Kết quả theo ${searchBy === 'title' ? 'tên sách' : 'tác giả'}` : 'Sách dành cho bạn'}</Text>
-        <Text style={styles.count}>{filtered.length} sách</Text>
+        <Text style={styles.resultTitle}>{query.trim() ? `Kết quả theo ${searchBy === 'title' ? 'tên sách' : 'tác giả'}` : params.sort === 'popular' ? 'Sách xem nhiều' : 'Tất cả sách'}</Text>
+        <Text style={styles.count}>{total} sách</Text>
       </View>
-      {filtered.length ? filtered.map((book) => (
+      {error ? <Pressable onPress={() => { setLoading(true); setReload((value) => value + 1); }}><Text style={styles.emptyText}>{error} · Chạm để thử lại</Text></Pressable> : null}
+      {loading && page === 1 ? <Text style={styles.emptyText}>Đang tải sách...</Text> : null}
+      {books.map((book) => (
         <Pressable key={book.id} onPress={() => router.push(`/book/${book.id}`)} style={({ pressed }) => [styles.result, pressed && styles.pressed]}>
           <BookCover book={book} width={76} elevated={false} />
           <View style={styles.resultBody}>
             <Text style={styles.bookCategory}>{book.category.toUpperCase()}</Text>
             <Text style={styles.bookTitle}>{book.title}</Text>
             <Text style={styles.author}>bởi {book.author}</Text>
-            <View style={styles.stats}><Text style={styles.star}>★ {book.rating}</Text><Text style={styles.dot}>•</Text><Text style={styles.time}>{book.readTime}</Text></View>
+            <View style={styles.stats}><Text style={styles.time}>{book.chaptersCount} chương</Text></View>
           </View>
           <AppIcon name="chevron" color={colors.inkSoft} />
         </Pressable>
-      )) : (
+      ))}
+      {!books.length && !loading && !error ? (
         <View style={styles.empty}><Text style={styles.emptyIcon}>⌕</Text><Text style={styles.emptyTitle}>Chưa tìm thấy cuốn sách phù hợp</Text><Text style={styles.emptyText}>Thử tên {searchBy === 'title' ? 'sách' : 'tác giả'} khác hoặc đổi chủ đề nhé.</Text></View>
-      )}
+      ) : null}
+      {page < lastPage && !error ? <Pressable disabled={loading} onPress={() => { setLoading(true); setPage((value) => value + 1); }} style={styles.filter}><Text style={styles.filterText}>{loading ? 'Đang tải...' : 'Xem thêm sách'}</Text></Pressable> : null}
     </Screen>
   );
 }

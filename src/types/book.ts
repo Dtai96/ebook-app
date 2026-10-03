@@ -1,22 +1,22 @@
+export type Chapter = {
+  id: string;
+  bookId: string;
+  number: number;
+  title: string;
+  content: string[];
+};
+
 export type Book = {
   id: string;
   title: string;
   author: string;
   category: string;
+  categoryId: number;
   description: string;
-  coverColor: string;
-  accentColor: string;
-  coverMark: string;
-  rating: number;
-  readers: string;
-  readTime: string;
+  coverUrl: string | null;
+  viewCount: number;
+  chaptersCount: number;
   chapters: Chapter[];
 };
 
-export type Chapter = {
-  id: string;
-  number: number;
-  title: string;
-  duration: string;
-  content: string[];
-};
+export type BookCategory = { id: number; name: string; booksCount: number };

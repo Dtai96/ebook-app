@@ -1,4 +1,5 @@
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback, useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { BookCard } from '@/components/book/book-card';
@@ -7,15 +8,39 @@ import { Screen } from '@/components/screen';
 import { SectionHeader } from '@/components/section-header';
 import { AppIcon } from '@/components/ui/app-icon';
 import { colors, radii, shadows } from '@/constants/theme';
-import { books, categories } from '@/data/books';
+import { bookApi } from '@/services/book-api';
 import { useAppStore } from '@/store/app-store';
+import type { Book, BookCategory } from '@/types/book';
 
 export default function HomeScreen() {
   const { progress, user } = useAppStore();
   const recentBookId = Object.entries(progress).sort((a, b) => b[1].updatedAt - a[1].updatedAt)[0]?.[0];
-  const currentBook = books.find((book) => book.id === recentBookId) ?? books[0];
-  const currentProgress = progress[currentBook.id] ?? { chapterId: currentBook.chapters[0].id, percent: 0 };
-  const currentChapter = currentBook.chapters.find((chapter) => chapter.id === currentProgress.chapterId) ?? currentBook.chapters[0];
+  const [newBooks, setNewBooks] = useState<Book[]>([]);
+  const [popularBooks, setPopularBooks] = useState<Book[]>([]);
+  const [categories, setCategories] = useState<BookCategory[]>([]);
+  const [currentBook, setCurrentBook] = useState<Book | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [reload, setReload] = useState(-1);
+  useFocusEffect(useCallback(() => { setLoading(true); setReload((value) => value + 1); }, []));
+  useEffect(() => {
+    if (reload < 0) return;
+    let active = true;
+    Promise.all([bookApi.home(), recentBookId ? bookApi.detail(recentBookId).catch(() => null) : Promise.resolve(null)])
+      .then(([home, reading]) => {
+        if (!active) return;
+        setNewBooks(home.newBooks);
+        setPopularBooks(home.popularBooks);
+        setCategories(home.categories.filter((item) => item.booksCount > 0));
+        setCurrentBook(reading);
+        setError('');
+      })
+      .catch((cause) => { if (active) setError(cause instanceof Error ? cause.message : 'Không tải được sách.'); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [recentBookId, reload]);
+  const currentProgress = currentBook ? progress[currentBook.id] : null;
+  const currentChapter = currentBook?.chapters.find((chapter) => chapter.id === currentProgress?.chapterId);
   const firstName = user?.name.trim().split(' ').slice(-1)[0] ?? 'bạn';
   return (
     <Screen>
@@ -32,60 +57,58 @@ export default function HomeScreen() {
         <Text style={styles.searchText}>Tìm tên sách, tác giả...</Text>
       </Pressable>
 
+      {loading ? <Text style={styles.status}>Đang tải sách...</Text> : null}
+      {error ? <Pressable onPress={() => { setLoading(true); setReload((value) => value + 1); }}><Text style={styles.status}>{error} · Chạm để thử lại</Text></Pressable> : null}
       <View style={styles.heroHeader}>
         <View>
-          <Text style={styles.heroKicker}>ĐỌC TIẾP</Text>
+          <Text style={styles.heroKicker}>{currentChapter ? 'ĐỌC TIẾP' : 'BẮT ĐẦU ĐỌC'}</Text>
           <Text style={styles.heroTitle}>Một khoảng lặng{`\n`}dành cho bạn.</Text>
         </View>
-        <View style={styles.streak}><Text style={styles.streakNumber}>7</Text><Text style={styles.streakLabel}>ngày</Text></View>
       </View>
 
-      <Pressable onPress={() => router.push(`/reader/${currentProgress.chapterId}`)} style={({ pressed }) => [styles.continueCard, pressed && styles.pressed]}>
+      {currentBook && currentProgress && currentChapter ? <Pressable onPress={() => router.push(`/reader/${currentProgress.chapterId}`)} style={({ pressed }) => [styles.continueCard, pressed && styles.pressed]}>
         <BookCover book={currentBook} width={92} elevated={false} />
         <View style={styles.continueContent}>
-          <Text style={styles.continueCategory}>CHƯƠNG {currentChapter.number} · {currentChapter.duration.toUpperCase()}</Text>
+          <Text style={styles.continueCategory}>CHƯƠNG {currentChapter.number}</Text>
           <Text numberOfLines={2} style={styles.continueTitle}>{currentBook.title}</Text>
           <Text numberOfLines={1} style={styles.chapter}>{currentChapter.title}</Text>
           <View style={styles.progressTrack}><View style={[styles.progressFill, { width: `${currentProgress.percent}%` }]} /></View>
           <View style={styles.progressMeta}><Text style={styles.progressText}>{currentProgress.percent}% chương hiện tại</Text><View style={styles.play}><AppIcon name="play" size={13} color={colors.white} /></View></View>
         </View>
-      </Pressable>
+      </Pressable> : !loading && !error ? <Pressable onPress={() => router.push('/(tabs)/search')} style={styles.continueCard}><Text style={styles.continueTitle}>Chọn một cuốn sách để bắt đầu đọc</Text></Pressable> : null}
 
       <View style={styles.section}>
         <SectionHeader title="Khám phá theo chủ đề" />
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryRow}>
-          {categories.slice(1).map((category, index) => (
-            <Pressable key={category} onPress={() => router.push({ pathname: '/(tabs)/search', params: { category } })} style={[styles.category, index === 0 && styles.categoryActive]}>
-              <Text style={[styles.categoryText, index === 0 && styles.categoryTextActive]}>{category}</Text>
+          {categories.map((category) => (
+            <Pressable key={category.id} onPress={() => router.push({ pathname: '/(tabs)/search', params: { categoryId: String(category.id) } })} style={styles.category}>
+              <Text style={styles.categoryText}>{category.name}</Text>
             </Pressable>
           ))}
         </ScrollView>
       </View>
 
       <View style={styles.section}>
-        <SectionHeader title="Được yêu thích" action="Xem tất cả" onAction={() => router.push('/(tabs)/search')} />
+        <SectionHeader title="Xem nhiều" action="Xem tất cả" onAction={() => router.push({ pathname: '/(tabs)/search', params: { sort: 'popular' } })} />
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.bookRow}>
-          {books.slice(1).map((book) => <BookCard key={book.id} book={book} />)}
+          {popularBooks.map((book) => <BookCard key={book.id} book={book} />)}
         </ScrollView>
       </View>
 
       <View style={styles.section}>
         <SectionHeader title="Mới trên Mộc Thư" action="Khám phá" onAction={() => router.push('/(tabs)/search')} />
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.bookRow}>
-          {[...books].reverse().slice(0, 4).map((book) => <BookCard key={book.id} book={book} />)}
+          {newBooks.map((book) => <BookCard key={book.id} book={book} />)}
         </ScrollView>
       </View>
 
-      <View style={styles.quote}>
-        <Text style={styles.quoteMark}>“</Text>
-        <Text style={styles.quoteText}>Sách là cách ta trò chuyện với những tâm hồn chưa từng gặp.</Text>
-        <Text style={styles.quoteAuthor}>GỢI Ý HÔM NAY</Text>
-      </View>
+      {!loading && !error && !newBooks.length ? <Text style={styles.status}>Chưa có sách trong thư viện. Hãy nhập sách ở backend trước.</Text> : null}
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
+  status: { color: colors.inkSoft, paddingVertical: 16 },
   topbar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: 8, marginBottom: 22 },
   eyebrow: { color: colors.coral, fontSize: 10, fontWeight: '800', letterSpacing: 1.3 },
   greeting: { color: colors.ink, fontSize: 25, fontWeight: '800', letterSpacing: -0.6, marginTop: 5 },
