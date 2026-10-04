@@ -26,3 +26,11 @@ test('invalid timeline input cannot reach the audio seek call', () => {
   assert.equal(timeline.chapterPosition([8, 12], 1, NaN), 8);
   assert.equal(timeline.segmentDuration({ text: 'A short sentence', duration: Infinity }), 1.2);
 });
+
+test('Vietnamese estimated highlighting holds on commas and sentence endings', () => {
+  assert.deepEqual(Array.from(timeline.wordWeights(['Mưa,', 'tạnh', 'rồi'], true)), [1.75, 1, 1]);
+  assert.equal(timeline.estimateWordIndex(timeline.wordWeights(['Mưa,', 'tạnh', 'rồi'], true), 0.4), 0);
+  assert.equal(timeline.estimateWordIndex(timeline.wordWeights(['Hết.”', 'Sang', 'trang'], true), 0.5), 0);
+  assert.equal(timeline.estimateWordIndex(timeline.wordWeights(['Hết.', 'Sang', 'trang'], true), 1), 2);
+  assert.deepEqual(Array.from(timeline.wordWeights(['Longer,', 'word.'], false)), [6, 4]);
+});

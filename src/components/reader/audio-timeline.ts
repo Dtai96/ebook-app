@@ -36,3 +36,24 @@ export function timelineFraction(locationX: number | undefined, width: number): 
 
   return Math.max(0, Math.min(1, locationX! / width));
 }
+
+export function wordWeights(words: string[], isVietnamese: boolean): number[] {
+  return words.map((word) => {
+    if (!isVietnamese) return Math.max(1, word.replace(/[^\p{L}\p{N}]/gu, '').length);
+
+    const spokenEnding = word.replace(/["”’')\]]+$/u, '');
+    if (/[.!?…]$/u.test(spokenEnding)) return 2.5;
+    if (/[,;:]$/u.test(spokenEnding)) return 1.75;
+    return 1;
+  });
+}
+
+export function estimateWordIndex(weights: number[], progress: number): number {
+  const target = weights.reduce((sum, weight) => sum + weight, 0) * progress;
+  let elapsed = 0;
+  for (let index = 0; index < weights.length; index += 1) {
+    elapsed += weights[index];
+    if (elapsed > target) return index;
+  }
+  return Math.max(0, weights.length - 1);
+}

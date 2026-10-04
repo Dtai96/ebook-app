@@ -4,7 +4,7 @@ import { GestureResponderEvent, Modal, Pressable, ScrollView, StyleSheet, Switch
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BookCover } from '@/components/book/book-cover';
-import { chapterPosition, seekTarget, segmentDuration, timelineFraction } from '@/components/reader/audio-timeline';
+import { chapterPosition, estimateWordIndex, seekTarget, segmentDuration, timelineFraction, wordWeights } from '@/components/reader/audio-timeline';
 import { AppIcon } from '@/components/ui/app-icon';
 import { colors, radii } from '@/constants/theme';
 import { AudioSegment, ttsApi } from '@/services/tts-api';
@@ -15,16 +15,6 @@ const timerOptions = [0, 15, 30];
 function formatTime(seconds: number) {
   const safe = Number.isFinite(seconds) ? Math.max(0, Math.round(seconds)) : 0;
   return `${String(Math.floor(safe / 60)).padStart(2, '0')}:${String(safe % 60).padStart(2, '0')}`;
-}
-
-function estimateWordIndex(weights: number[], progress: number) {
-  const target = weights.reduce((sum, weight) => sum + weight, 0) * progress;
-  let elapsed = 0;
-  for (let index = 0; index < weights.length; index += 1) {
-    elapsed += weights[index];
-    if (elapsed > target) return index;
-  }
-  return Math.max(0, weights.length - 1);
 }
 
 export function AudioPlayer({ visible, onClose, book, chapter: initialChapter, speed, setSpeed }: {
@@ -77,8 +67,8 @@ export function AudioPlayer({ visible, onClose, book, chapter: initialChapter, s
   const playing = Boolean(audioUrl && status.playing);
   const isVietnamese = /^vi(?:-|$)/i.test(book.language);
   const words = useMemo(() => currentSegment?.text.trim().split(/\s+/).filter(Boolean) ?? [], [currentSegment?.text]);
-  const wordWeights = words.map((word) => isVietnamese ? 1 : Math.max(1, word.replace(/[^\p{L}\p{N}]/gu, '').length));
-  const estimatedWord = estimateWordIndex(wordWeights, duration > 0 ? Math.min(1, position / duration) : 0);
+  const weights = wordWeights(words, isVietnamese);
+  const estimatedWord = estimateWordIndex(weights, duration > 0 ? Math.min(1, position / duration) : 0);
   const hasWordTimings = currentSegment?.word_starts?.length === words.length;
   let activeWord = estimatedWord;
   if (hasWordTimings) {
