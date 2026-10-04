@@ -17,6 +17,16 @@ function formatTime(seconds: number) {
   return `${String(Math.floor(safe / 60)).padStart(2, '0')}:${String(safe % 60).padStart(2, '0')}`;
 }
 
+function estimateWordIndex(weights: number[], progress: number) {
+  const target = weights.reduce((sum, weight) => sum + weight, 0) * progress;
+  let elapsed = 0;
+  for (let index = 0; index < weights.length; index += 1) {
+    elapsed += weights[index];
+    if (elapsed > target) return index;
+  }
+  return Math.max(0, weights.length - 1);
+}
+
 export function AudioPlayer({ visible, onClose, book, chapter: initialChapter, speed, setSpeed }: {
   visible: boolean;
   onClose: (chapterId: string) => void;
@@ -65,14 +75,10 @@ export function AudioPlayer({ visible, onClose, book, chapter: initialChapter, s
   const chapterDuration = durations.reduce((sum, item) => sum + item, 0);
   const playbackPosition = chapterPosition(durations, segmentIndex, position);
   const playing = Boolean(audioUrl && status.playing);
+  const isVietnamese = /^vi(?:-|$)/i.test(book.language);
   const words = useMemo(() => currentSegment?.text.trim().split(/\s+/).filter(Boolean) ?? [], [currentSegment?.text]);
-  const totalWeight = words.reduce((sum, word) => sum + Math.max(1, word.replace(/[^a-z0-9]/gi, '').length), 0);
-  const spokenWeight = totalWeight * (duration > 0 ? Math.min(1, position / duration) : 0);
-  let elapsedWeight = 0;
-  const estimatedWord = Math.max(0, words.findIndex((word) => {
-    elapsedWeight += Math.max(1, word.replace(/[^a-z0-9]/gi, '').length);
-    return elapsedWeight > spokenWeight;
-  }));
+  const wordWeights = words.map((word) => isVietnamese ? 1 : Math.max(1, word.replace(/[^\p{L}\p{N}]/gu, '').length));
+  const estimatedWord = estimateWordIndex(wordWeights, duration > 0 ? Math.min(1, position / duration) : 0);
   const hasWordTimings = currentSegment?.word_starts?.length === words.length;
   let activeWord = estimatedWord;
   if (hasWordTimings) {
@@ -246,7 +252,7 @@ export function AudioPlayer({ visible, onClose, book, chapter: initialChapter, s
       <View style={[styles.page, { paddingTop: insets.top + 8, paddingBottom: Math.max(insets.bottom, 20) }]}>
         <View style={styles.nav}><Pressable accessibilityLabel="Đóng trình phát" onPress={close} style={styles.close}><AppIcon name="close" size={30} /></Pressable><Text style={styles.navTitle}>AI Voice</Text><View style={styles.close} /></View>
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
-          <View style={styles.spark}><AppIcon name="spark" size={15} color={colors.coral} /><Text style={styles.sparkText}>GIỌNG ĐỌC AI · TIẾNG ANH</Text></View>
+          <View style={styles.spark}><AppIcon name="spark" size={15} color={colors.coral} /><Text style={styles.sparkText}>{isVietnamese ? 'GIỌNG ĐỌC AI · HỮU ĐẠT' : 'GIỌNG ĐỌC AI · TIẾNG ANH'}</Text></View>
           <BookCover book={book} width={146} />
           <Text style={styles.chapter}>CHƯƠNG {chapter.number}</Text>
           <Text style={styles.title}>{chapter.title}</Text>

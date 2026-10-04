@@ -69,6 +69,8 @@ function ReaderChapter({ book, chapter, percent, paragraph }: { book: Book; chap
   const content = chapter.content;
   const quoteIndex = selectedParagraph ?? Math.min(content.length - 1, Math.floor((readingPercent / 100) * content.length));
   const selectedQuote = content[Math.max(0, quoteIndex)];
+  const isVietnameseBook = /^vi(?:-|$)/i.test(book.language);
+  const supportsAudio = /^(?:en|vi)(?:-|$)/i.test(book.language);
 
   const restorePosition = () => {
     if (restored.current || !viewportHeight.current || !contentHeight.current) return;
@@ -131,7 +133,7 @@ function ReaderChapter({ book, chapter, percent, paragraph }: { book: Book; chap
         <View style={[styles.toolbar, shadows.card, { backgroundColor: readerPreferences.theme === 'dark' ? '#343C36' : colors.ink }]}>
           <Pressable onPress={() => setSettingsOpen(true)} style={styles.tool}><AppIcon name="settings" color={colors.white} /><Text style={styles.toolLabel}>Hiển thị</Text></Pressable>
           <View style={styles.toolbarDivider} />
-          <Pressable disabled={!/^en(?:-|$)/i.test(book.language)} onPress={() => setPlayerOpen(true)} style={[styles.voiceButton, !/^en(?:-|$)/i.test(book.language) && styles.disabled]}><View style={styles.voiceIcon}><AppIcon name="spark" size={14} color={colors.white} /></View><View><Text style={styles.voiceTitle}>Nghe AI Voice</Text><Text style={styles.voiceSubtitle}>{/^en(?:-|$)/i.test(book.language) ? `English · ${readerPreferences.speed}x` : 'Chưa hỗ trợ ngôn ngữ này'}</Text></View></Pressable>
+          <Pressable disabled={!supportsAudio} onPress={() => setPlayerOpen(true)} style={[styles.voiceButton, !supportsAudio && styles.disabled]}><View style={styles.voiceIcon}><AppIcon name="spark" size={14} color={colors.white} /></View><View><Text style={styles.voiceTitle}>Nghe AI Voice</Text><Text style={styles.voiceSubtitle}>{supportsAudio ? `${isVietnameseBook ? 'Tiếng Việt · Hữu Đạt' : 'English'} · ${readerPreferences.speed}x` : 'Chưa hỗ trợ ngôn ngữ này'}</Text></View></Pressable>
           <View style={styles.progressCircle}><Text style={styles.progressNumber}>{readingPercent}%</Text></View>
         </View>
       </View>
