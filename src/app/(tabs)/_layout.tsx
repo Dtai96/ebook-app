@@ -4,23 +4,6 @@ import { StyleSheet } from "react-native";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { colors } from "@/constants/theme";
 
-// const tabGlyphs: Record<string, string> = {
-//   home: "⌂",
-//   search: "⌕",
-//   library: "▤",
-//   profile: "●",
-// };
-
-// function TabIcon({ name, focused }: { name: string; focused: boolean }) {
-//   return (
-//     <View style={[styles.iconWrap, focused && styles.iconWrapActive]}>
-//       <Text style={[styles.icon, focused && styles.iconActive]}>
-//         {tabGlyphs[name]}
-//       </Text>
-//     </View>
-//   );
-// }
-
 export default function TabsLayout() {
   return (
     <Tabs
@@ -30,9 +13,6 @@ export default function TabsLayout() {
         tabBarInactiveTintColor: "#899088",
         tabBarLabelStyle: styles.label,
         tabBarStyle: styles.bar,
-        // tabBarIcon: ({ focused }) => (
-        //   <TabIcon name={route.name} focused={focused} />
-        // ),
       })}
     >
       <Tabs.Screen
