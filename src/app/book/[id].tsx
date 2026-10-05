@@ -1,6 +1,6 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BookCover } from '@/components/book/book-cover';
@@ -28,8 +28,21 @@ export default function BookDetailScreen() {
   const favorite = book ? favorites.includes(book.id) : false;
   const currentChapter = book ? progress[book.id]?.chapterId ?? book.chapters[0]?.id : undefined;
 
-  if (loading && (!book || book.id !== id)) return <SafeAreaView style={styles.safe}><Text style={styles.description}>Đang tải sách...</Text></SafeAreaView>;
-  if (error || !book || book.id !== id) return <SafeAreaView style={styles.safe}><Pressable onPress={() => { setLoading(true); setError(''); setReload((value) => value + 1); }}><Text style={styles.description}>{error || 'Không tìm thấy sách.'} · Chạm để thử lại</Text></Pressable></SafeAreaView>;
+  if (loading && (!book || book.id !== id)) {
+    return <SafeAreaView style={styles.loadingContainer}>
+      <ActivityIndicator size="large" color={colors.moss} />
+      <Text style={styles.description}>Đang tải sách...</Text>
+    </SafeAreaView>;
+  }
+
+  if (error || !book || book.id !== id) {
+    return <SafeAreaView style={styles.loadingContainer}>
+      <Text style={styles.description}>{error || 'Không tìm thấy sách.'}</Text>
+      <Pressable style={styles.retryButton} onPress={() => { setLoading(true); setError(''); setReload((value) => value + 1); }}>
+        <Text style={styles.retryText}>Thử lại</Text>
+      </Pressable>
+    </SafeAreaView>;
+  }
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -80,6 +93,9 @@ export default function BookDetailScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.paper },
+  loadingContainer: {flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: colors.paper, paddingTop: 50, gap: 10 },
+  retryButton: { backgroundColor: colors.moss, margin: 20, paddingHorizontal: 20, paddingVertical: 12, borderRadius: radii.md },
+  retryText: { color: colors.paper, fontSize: 14, fontWeight: "700" },
   nav: { height: 54, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   navTitle: { color: colors.ink, fontSize: 14, fontWeight: '800' },
   iconButton: { width: 42, height: 42, alignItems: 'center', justifyContent: 'center' },

@@ -1,7 +1,7 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { KeyboardAvoidingView, Platform, Modal, NativeScrollEvent, NativeSyntheticEvent, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, Modal, NativeScrollEvent, NativeSyntheticEvent, Pressable, ScrollView, StyleSheet, Text, TextInput, View, ActivityIndicator } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AudioPlayer } from '@/components/reader/audio-player';
@@ -36,8 +36,20 @@ export default function ReaderScreen() {
     }).catch((cause) => { if (active) setError(cause instanceof Error ? cause.message : 'Không tải được chương.'); });
     return () => { active = false; };
   }, [id, reload]);
-  if (error) return <SafeAreaView style={styles.safe}><Pressable onPress={() => setReload((value) => value + 1)}><Text>{error} · Chạm để thử lại</Text></Pressable></SafeAreaView>;
-  if (!book || !chapter || chapter.id !== id) return <SafeAreaView style={styles.safe}><Text>Đang tải chương...</Text></SafeAreaView>;
+  if (error) {
+    return <SafeAreaView style={styles.loadingContainer}>
+      <Text style={styles.description}>{error}</Text>
+      <Pressable style={styles.retryButton} onPress={() => setReload((value) => value + 1)}>
+        <Text style={styles.retryText}>Thử lại</Text>
+      </Pressable>
+    </SafeAreaView>;
+  } 
+  if (!book || !chapter || chapter.id !== id) {
+    return <SafeAreaView style={styles.loadingContainer}>
+      <ActivityIndicator size="large" color={colors.moss} />
+      <Text>Đang tải chương...</Text>
+    </SafeAreaView>;
+  }
   return <ReaderChapter key={[id, percent, paragraph].join(':')} book={book} chapter={chapter} percent={percent} paragraph={paragraph} />;
 }
 
@@ -182,6 +194,9 @@ function ReaderChapter({ book, chapter, percent, paragraph }: { book: Book; chap
 
 const styles = StyleSheet.create({
   safe: { flex: 1 },
+  loadingContainer: {flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: colors.paper, paddingTop: 50, gap: 10 },
+  retryButton: { backgroundColor: colors.moss, margin: 20, paddingHorizontal: 20, paddingVertical: 12, borderRadius: radii.md },
+  retryText: { color: colors.paper, fontSize: 14, fontWeight: "700" },
   nav: { height: 57, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1 },
   iconButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   navCenter: { flex: 1, alignItems: 'center', paddingHorizontal: 8 },
@@ -227,4 +242,5 @@ const styles = StyleSheet.create({
   noteCount: { color: colors.inkSoft, fontSize: 9 },
   saveButton: { height: 50, marginTop: 18, borderRadius: radii.md, backgroundColor: colors.moss, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
   saveButtonText: { color: colors.white, fontSize: 14, fontWeight: '800' },
+  description: { color: colors.inkSoft, fontSize: 14, lineHeight: 23, marginTop: 12 },
 });
