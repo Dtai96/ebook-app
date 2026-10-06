@@ -3,8 +3,9 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { ApiError, onUnauthorized, setApiToken } from '@/services/api';
 import { authApi, type AuthResponse, type AuthUser } from '@/services/auth-api';
 import { tokenStorage } from '@/services/token-storage';
+import { personalLibraryApi } from '@/services/personal-library-api';
 
-export type UserProfile = AuthUser & { initials: string };
+export type UserProfile = AuthUser & { initials: string; avatarUrl: string | null };
 type AuthState = {
   user: UserProfile | null;
   initializing: boolean;
@@ -13,10 +14,12 @@ type AuthState = {
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (name: string, email: string, password: string, confirmation: string) => Promise<void>;
   signOut: () => Promise<void>;
+  updateProfile: (changes: { name?: string; avatar_url?: string | null }) => Promise<void>;
 };
 const AuthContext = createContext<AuthState | null>(null);
 const profile = (user: AuthUser): UserProfile => ({
   ...user,
+  avatarUrl: user.avatar_url,
   initials: user.name.trim().split(/\s+/).slice(-2).map((part) => part[0]?.toUpperCase()).join('') || 'MT',
 });
 
@@ -85,8 +88,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setSessionError(null);
   }, []);
 
-  const value = useMemo(() => ({ user, initializing, sessionError, isAdmin: user?.role === 'admin', signIn, signUp, signOut }),
-    [user, initializing, sessionError, signIn, signUp, signOut]);
+  const updateProfile = useCallback(async (changes: { name?: string; avatar_url?: string | null }) => {
+    const result = await personalLibraryApi.updateProfile(changes);
+    setUser(profile(result.user));
+  }, []);
+
+  const value = useMemo(() => ({ user, initializing, sessionError, isAdmin: user?.role === 'admin', signIn, signUp, signOut, updateProfile }),
+    [user, initializing, sessionError, signIn, signUp, signOut, updateProfile]);
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 

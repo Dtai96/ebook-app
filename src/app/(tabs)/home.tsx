@@ -1,6 +1,7 @@
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View , ActivityIndicator} from 'react-native';
+import { Image } from 'expo-image';
 
 import { BookCard } from '@/components/book/book-card';
 import { BookCover } from '@/components/book/book-cover';
@@ -49,7 +50,7 @@ export default function HomeScreen() {
           <Text style={styles.eyebrow}>{new Date().toLocaleDateString('vi-VN', { day: 'numeric', month: 'long' }).toUpperCase()}</Text>
           <Text style={styles.greeting}>Chào {firstName}</Text>
         </View>
-        <Pressable onPress={() => router.push('/(tabs)/profile')} style={styles.avatar}><Text style={styles.avatarText}>{user?.initials ?? 'MT'}</Text></Pressable>
+        <Pressable onPress={() => router.push('/(tabs)/profile')} style={styles.avatar}>{user?.avatarUrl ? <Image source={{ uri: user.avatarUrl }} contentFit="cover" style={styles.avatarImage} /> : <Text style={styles.avatarText}>{user?.initials ?? 'MT'}</Text>}</Pressable>
       </View>
 
       <Pressable onPress={() => router.push('/(tabs)/search')} style={styles.search}>
@@ -130,7 +131,8 @@ const styles = StyleSheet.create({
   topbar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: 8, marginBottom: 22 },
   eyebrow: { color: colors.coral, fontSize: 10, fontWeight: '800', letterSpacing: 1.3 },
   greeting: { color: colors.ink, fontSize: 25, fontWeight: '800', letterSpacing: -0.6, marginTop: 5 },
-  avatar: { width: 46, height: 46, borderRadius: 23, backgroundColor: colors.moss, alignItems: 'center', justifyContent: 'center' },
+  avatar: { width: 46, height: 46, borderRadius: 23, backgroundColor: colors.moss, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  avatarImage: { width: '100%', height: '100%' },
   avatarText: { color: colors.white, fontSize: 13, fontWeight: '800' },
   search: { height: 52, borderRadius: radii.md, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, gap: 10 },
   searchText: { color: '#7C837D', fontSize: 15 },

@@ -1,7 +1,8 @@
 import { apiRequest } from './api';
 
 export type Role = 'reader' | 'admin';
-export type AuthUser = { id: number; name: string; email: string; role: Role };
+export type ApiReaderPreferences = { font_size?: number; line_height?: number; theme?: 'light' | 'sepia' | 'dark'; speed?: number };
+export type AuthUser = { id: number; name: string; email: string; role: Role; avatar_url: string | null; preferences: ApiReaderPreferences };
 export type AuthResponse = { token: string; user: AuthUser };
 
 export const authApi = {

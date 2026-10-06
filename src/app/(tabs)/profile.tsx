@@ -1,6 +1,7 @@
 import { router } from "expo-router";
 import { useState } from "react";
-import { Pressable, StyleSheet, Switch, Text, View } from "react-native";
+import { Modal, Pressable, StyleSheet, Switch, Text, TextInput, View } from "react-native";
+import { Image } from "expo-image";
 
 import { ReaderSettings } from "@/components/reader/reader-settings";
 import { Screen } from "@/components/screen";
@@ -10,13 +11,17 @@ import { useAuth } from "@/hooks/use-auth";
 import { useAppStore } from "@/store/app-store";
 
 export default function ProfileScreen() {
-  const { bookmarks, readerPreferences, updateReaderPreferences } =
+  const { bookmarks, readerPreferences, updateReaderPreferences, dataError } =
     useAppStore();
-  const { signOut, user, isAdmin, initializing, sessionError } = useAuth();
+  const { signOut, updateProfile, user, isAdmin, initializing, sessionError } = useAuth();
   const [loggingOut, setLoggingOut] = useState(false);
   const [authError, setAuthError] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [profileName, setProfileName] = useState(user?.name ?? "");
+  const [avatarUrl, setAvatarUrl] = useState(user?.avatarUrl ?? "");
+  const [savingProfile, setSavingProfile] = useState(false);
   const [notifications, setNotifications] = useState(true);
   const rows = [
     {
@@ -80,9 +85,9 @@ export default function ProfileScreen() {
       <Text style={styles.kicker}>TÀI KHOẢN</Text>
       <Text style={styles.title}>Cá nhân</Text>
       <View style={styles.profileCard}>
-        <View style={styles.avatar}>
-          <Text style={styles.avatarText}>{displayUser.initials}</Text>
-        </View>
+        <Pressable onPress={() => { setProfileName(user?.name ?? ""); setAvatarUrl(user?.avatarUrl ?? ""); setProfileOpen(true); }} style={styles.avatar}>
+          {user?.avatarUrl ? <Image source={{ uri: user.avatarUrl }} contentFit="cover" style={styles.avatarImage} /> : <Text style={styles.avatarText}>{displayUser.initials}</Text>}
+        </Pressable>
         <View style={styles.person}>
           <Text style={styles.name}>{displayUser.name}</Text>
           <Text style={styles.email}>{displayUser.email}</Text>
@@ -91,6 +96,7 @@ export default function ProfileScreen() {
           </View>
         </View>
       </View>
+      {user ? <Pressable onPress={() => { setProfileName(user.name); setAvatarUrl(user.avatarUrl ?? ""); setProfileOpen(true); }} style={styles.editProfile}><Text style={styles.editProfileText}>Chỉnh sửa hồ sơ</Text></Pressable> : null}
       <View style={styles.goalCard}>
         <View>
           <Text style={styles.goalKicker}>MỤC TIÊU TUẦN</Text>
@@ -151,6 +157,32 @@ export default function ProfileScreen() {
         theme={readerPreferences.theme}
         setTheme={(theme) => updateReaderPreferences({ theme })}
       />
+      <Modal visible={profileOpen} transparent animationType="fade" onRequestClose={() => setProfileOpen(false)}>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.profileModal}>
+            <Text style={styles.modalTitle}>Hồ sơ của bạn</Text>
+            <Text style={styles.inputLabel}>Tên hiển thị</Text>
+            <TextInput value={profileName} onChangeText={setProfileName} maxLength={255} style={styles.profileInput} />
+            <Text style={styles.inputLabel}>Đường dẫn ảnh đại diện</Text>
+            <TextInput value={avatarUrl} onChangeText={setAvatarUrl} autoCapitalize="none" keyboardType="url" placeholder="https://..." style={styles.profileInput} />
+            <View style={styles.modalActions}>
+              <Pressable onPress={() => setProfileOpen(false)} style={styles.modalCancel}><Text style={styles.modalCancelText}>Hủy</Text></Pressable>
+              <Pressable disabled={savingProfile || !profileName.trim()} onPress={async () => {
+                setSavingProfile(true);
+                setAuthError("");
+                try {
+                  await updateProfile({ name: profileName.trim(), avatar_url: avatarUrl.trim() || null });
+                  setProfileOpen(false);
+                } catch (error) {
+                  setAuthError(error instanceof Error ? error.message : "Không cập nhật được hồ sơ.");
+                } finally {
+                  setSavingProfile(false);
+                }
+              }} style={styles.modalSave}><Text style={styles.modalSaveText}>{savingProfile ? "Đang lưu..." : "Lưu"}</Text></Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
       {isAdmin ? (
         <Pressable
           onPress={() => router.push("/bookadmin")}
@@ -159,8 +191,8 @@ export default function ProfileScreen() {
           <Text style={styles.logoutText}>Quản lý sách</Text>
         </Pressable>
       ) : null}
-      {authError || sessionError ? (
-        <Text style={styles.help}>{authError || sessionError}</Text>
+      {authError || sessionError || dataError ? (
+        <Text style={styles.help}>{authError || sessionError || dataError}</Text>
       ) : null}
       <Pressable
         disabled={loggingOut || initializing}
@@ -222,7 +254,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.moss,
     alignItems: "center",
     justifyContent: "center",
+    overflow: "hidden",
   },
+  avatarImage: { width: "100%", height: "100%" },
   avatarText: { color: colors.white, fontWeight: "800", fontSize: 17 },
   person: { flex: 1, marginLeft: 14 },
   name: { color: colors.ink, fontSize: 19, fontWeight: "800" },
@@ -241,6 +275,18 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     letterSpacing: 0.6,
   },
+  editProfile: { alignSelf: "flex-end", paddingVertical: 8, paddingHorizontal: 4 },
+  editProfileText: { color: colors.moss, fontWeight: "800", fontSize: 12 },
+  modalBackdrop: { flex: 1, justifyContent: "center", padding: 22, backgroundColor: "rgba(18,25,21,0.45)" },
+  profileModal: { backgroundColor: colors.surface, borderRadius: radii.lg, padding: 20 },
+  modalTitle: { color: colors.ink, fontSize: 20, fontWeight: "800", marginBottom: 18 },
+  inputLabel: { color: colors.inkSoft, fontSize: 12, fontWeight: "700", marginBottom: 6, marginTop: 10 },
+  profileInput: { minHeight: 46, borderWidth: 1, borderColor: colors.border, borderRadius: radii.md, backgroundColor: colors.paper, color: colors.ink, paddingHorizontal: 12 },
+  modalActions: { flexDirection: "row", gap: 10, marginTop: 22 },
+  modalCancel: { flex: 1, minHeight: 46, borderRadius: radii.md, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
+  modalCancelText: { color: colors.inkSoft, fontWeight: "700" },
+  modalSave: { flex: 1, minHeight: 46, borderRadius: radii.md, backgroundColor: colors.moss, alignItems: "center", justifyContent: "center" },
+  modalSaveText: { color: colors.white, fontWeight: "800" },
   goalCard: {
     backgroundColor: colors.mossDark,
     borderRadius: radii.lg,
