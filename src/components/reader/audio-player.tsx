@@ -343,7 +343,7 @@ const styles = StyleSheet.create({
   controls: { flexDirection: 'row', alignItems: 'center', gap: 32, marginTop: 10 },
   play: { width: 68, height: 68, borderRadius: 34, backgroundColor: colors.moss, alignItems: 'center', justifyContent: 'center', paddingLeft: 3 },
   control: { width: 50, height: 50, alignItems: 'center', justifyContent: 'center' },
-  seekLabel: { position: 'absolute', color: colors.ink, fontSize: 8, fontWeight: '800', top: 35 },
+  seekLabel: { position: 'absolute', color: colors.ink, fontSize: 9, fontWeight: '800', top: 35, margin: 9 },
   sectionLabel: { alignSelf: 'flex-start', color: colors.inkSoft, fontSize: 9, fontWeight: '800', letterSpacing: 1.2, marginTop: 23 },
   speeds: { width: '100%', flexDirection: 'row', justifyContent: 'space-between', marginTop: 10 },
   speed: { minWidth: 48, height: 34, borderRadius: radii.pill, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' },

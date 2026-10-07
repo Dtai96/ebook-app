@@ -1,4 +1,4 @@
-import { apiRequest } from './api';
+import { API_BASE_URL, apiRequest } from './api';
 import type { Book, BookCategory, Chapter } from '@/types/book';
 
 type ApiChapter = { id: number; book_id: number; number: number; title: string; content?: string };
@@ -17,10 +17,26 @@ const mapChapter = (chapter: ApiChapter): Chapter => ({
   title: chapter.title, content: chapter.content?.split(/\n\s*\n/).map((part) => part.trim()).filter(Boolean) ?? [],
 });
 
+const resolveCoverUrl = (coverUrl: string | null): string | null => {
+  if (!coverUrl) return null;
+
+  try {
+    const apiUrl = new URL(API_BASE_URL);
+    const resolvedUrl = new URL(coverUrl, `${apiUrl.origin}/`);
+    if (['localhost', '127.0.0.1', '0.0.0.0'].includes(resolvedUrl.hostname)) {
+      resolvedUrl.hostname = apiUrl.hostname;
+      if (!resolvedUrl.port) resolvedUrl.port = apiUrl.port;
+    }
+    return resolvedUrl.toString();
+  } catch {
+    return coverUrl;
+  }
+};
+
 const mapBook = (book: ApiBook): Book => ({
   id: String(book.id), title: book.title, author: book.author?.name ?? '', language: book.language,
   category: book.category?.name ?? '', categoryId: book.category?.id ?? 0,
-  description: book.description ?? '', coverUrl: book.cover_url,
+  description: book.description ?? '', coverUrl: resolveCoverUrl(book.cover_url),
   viewCount: book.view_count, chaptersCount: book.chapters_count,
   chapters: book.chapters?.map(mapChapter) ?? [],
 });
