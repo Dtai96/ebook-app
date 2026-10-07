@@ -51,6 +51,7 @@ export function AudioPlayer({ visible, onClose, book, chapter: initialChapter, s
   const playbackOptionsRef = useRef({ autoNext, stopAtChapterEnd, timerExpired, chapterIndex, hasNextChapter: false });
   const chapter = book.chapters[chapterIndex];
   const hasNextChapter = chapterIndex < book.chapters.length - 1;
+  const hasPrevChapter = chapterIndex > 0;
   useEffect(() => {
     playbackOptionsRef.current = { autoNext, stopAtChapterEnd, timerExpired, chapterIndex, hasNextChapter };
   }, [autoNext, stopAtChapterEnd, timerExpired, chapterIndex, hasNextChapter]);
@@ -234,6 +235,7 @@ export function AudioPlayer({ visible, onClose, book, chapter: initialChapter, s
     else { if (duration > 0 && position >= duration) player.seekTo(0).catch(() => {}); player.play(); }
   };
   const onNextChapter = () => { if (hasNextChapter) selectChapter(chapterIndex + 1); };
+  const onPrevChapter = () => { if (hasPrevChapter) selectChapter(chapterIndex - 1); };
   const selectTimer = (minutes: number) => { setTimerMinutes(minutes); setTimerSeconds(minutes * 60); setTimerExpired(false); setStopAtChapterEnd(false); };
   const progress = `${chapterDuration > 0 ? Math.round(playbackPosition / chapterDuration * 100) : 0}%` as `${number}%`;
 
@@ -289,11 +291,19 @@ export function AudioPlayer({ visible, onClose, book, chapter: initialChapter, s
             <Pressable onPress={() => { setStopAtChapterEnd(true); setTimerMinutes(0); setTimerSeconds(0); }} style={[styles.timerChip, stopAtChapterEnd && styles.timerChipActive]}><Text style={[styles.timerText, stopAtChapterEnd && styles.timerTextActive]}>Hết chương</Text></Pressable>
           </View>
 
-          <Pressable disabled={!hasNextChapter} onPress={onNextChapter} style={[styles.nextChapter, !hasNextChapter && styles.disabled]}>
-            <View style={styles.nextIcon}><AppIcon name="next" color={colors.moss} /></View>
-            <View style={styles.nextBody}><Text style={styles.nextLabel}>PHÁT TIẾP</Text><Text style={styles.nextTitle}>{hasNextChapter ? 'Chuyển sang chương kế tiếp' : 'Đây là chương cuối'}</Text></View>
-            <AppIcon name="chevron" color={colors.inkSoft} />
-          </Pressable>
+          <View style={styles.chapterNavRow}>
+            <Pressable disabled={!hasPrevChapter} onPress={onPrevChapter} style={[styles.nextChapter, styles.chapterNavItem, !hasPrevChapter && styles.disabled]}>
+              <View style={{ transform: [{ rotate: '180deg' }] }}><AppIcon name="chevron" color={colors.inkSoft} /></View>
+              <View style={styles.nextBody}><Text style={styles.nextLabel}>PHÁT LẠI</Text><Text style={styles.nextTitle}>{hasPrevChapter ? 'Chương trước' : 'Đây là chương đầu'}</Text></View>
+              <View style={[styles.nextIcon, { transform: [{ scaleX: -1 }] }]}><AppIcon name="next" color={colors.moss} /></View>
+            </Pressable>
+            <Pressable disabled={!hasNextChapter} onPress={onNextChapter} style={[styles.nextChapter, styles.chapterNavItem, !hasNextChapter && styles.disabled]}>
+              <View style={styles.nextIcon}><AppIcon name="next" color={colors.moss} /></View>
+              <View style={styles.nextBody}><Text style={styles.nextLabel}>PHÁT TIẾP</Text><Text style={styles.nextTitle}>{hasNextChapter ? 'Chuyển sang chương kế tiếp' : 'Đây là chương cuối'}</Text></View>
+              <AppIcon name="chevron" color={colors.inkSoft} />
+            </Pressable>
+          </View>
+          
           <View style={styles.autoNextRow}><View><Text style={styles.autoNextTitle}>Tự động phát chương sau</Text><Text style={styles.autoNextText}>Tiếp tục nghe mà không đóng AI Voice</Text></View><Switch accessibilityLabel="Tự động phát chương sau" value={autoNext} onValueChange={setAutoNext} trackColor={{ false: colors.border, true: colors.sage }} thumbColor={autoNext ? colors.moss : colors.white} /></View>
           <View style={styles.voice}><View style={styles.voiceAvatar}><Text style={styles.voiceAvatarText}>EN</Text></View><View style={styles.voiceBody}><Text style={styles.voiceLabel}>Giọng đọc</Text><Text style={styles.voiceName}>Kokoro · af_heart</Text></View><View style={styles.liveBadge}><Text style={styles.liveBadgeText}>ĐANG CHỌN</Text></View></View>
         </ScrollView>
@@ -364,4 +374,6 @@ const styles = StyleSheet.create({
   voiceName: { color: colors.ink, fontSize: 13, fontWeight: '700', marginTop: 3 },
   liveBadge: { backgroundColor: '#E4ECE5', paddingHorizontal: 8, paddingVertical: 5, borderRadius: radii.pill },
   liveBadgeText: { color: colors.moss, fontSize: 7, fontWeight: '900' },
+  chapterNavRow: { flexDirection: 'row', gap: 8, width: '100%', marginTop: 18 },
+  chapterNavItem: { flex: 1, width: undefined, marginTop: 0 },
 });
