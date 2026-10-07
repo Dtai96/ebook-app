@@ -47,3 +47,7 @@ example
 /android
 UI_VERIFICATION.md
 .env
+
+# Certificate Authority
+*.ca
+$ca
